@@ -1,0 +1,16 @@
+# 本地状态与配置
+config/environment_state.json
+config/release_blocklist.txt
+doc-writer/config/user_profile.json
+doc-writer/knowledge-base/
+
+# 各能力模块工作区产物
+**/official-docs/*
+!**/official-docs/
+ppt-assistant/projects/*
+!ppt-assistant/projects/.gitkeep
+
+# Python / 系统
+__pycache__/
+*.pyc
+.DS_Store

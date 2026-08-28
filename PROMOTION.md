@@ -1,0 +1,17 @@
+# 深知晓办公助手 GitHub Public 发布说明
+
+仓库地址：
+
+https://github.com/dylanzhangzx/dknowc-office-assistant
+
+## 简介
+
+深知晓办公助手（dknowc office assistant）是北京彩智科技有限公司旗下「深知可信智能」提供的综合办公 Agent Skill，一站式覆盖公文写作、可信咨询、可信检索、PPT 生成四大场景：公文写作支持通知、请示、报告、总结、方案、讲话稿等文种的起草、改写、审查与 Word/红头交付；可信咨询输出带权威来源角标的政策问答；可信检索交付直接答案 + 可点击溯源 HTML + 干净 Markdown 三件套；PPT 生成采用约束 SVG → 原生 DrawingML 编译架构（引擎抽取自开源项目 ppt-master，MIT，见 THIRD_PARTY_NOTICES.md），内置党政简洁、数据图表、商务汇报、庄重典雅、培训课件五种风格，从主题或已有材料直接成稿。全部事实素材经深知权威文件库检索，全程可溯源。
+
+本 GitHub Public 版采用 skills.sh 渠道配置，不内置 API Key。四个能力模块共用环境变量 `DKNOWC_API_KEY`；需要检索/咨询的任务首次调用时须先确认已配置，未配置时 Agent 可先通过 MaaS 手机号验证码流程获取 Key 临时使用，持久化须用户明确同意。
+
+## GitHub Release 文案
+
+Title: v1.0.0 — 首次整合发布
+
+深知晓办公助手 v1.0.0：整合深知公文写作 v3.4.5、深知可信咨询 v1.0.5、深知可信搜索 v1.1.4、深知可信PPT v1.0.3 四大能力，统一公共层与 DKNOWC_API_KEY 凭证，双确认门工作流。
