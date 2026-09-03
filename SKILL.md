@@ -7,7 +7,7 @@ description: "深知晓办公助手，是由北京彩智科技有限公司旗下
 description_zh: "深知晓办公助手，是由北京彩智科技有限公司旗下“深知可信智能”提供的综合办公助手，统一覆盖公文写作、可信咨询、可信检索、PPT 生成四大类办公场景，并可持续扩展更多能力。公文写作能力按公文国家标准支持通知、请示、报告、函、复函、批复、会议纪要、通报、通告、公告、意见、方案、总结、管理办法、汇报材料、发言稿、讲话稿、调研报告、经验材料等常见文种和工作材料，正式交付生成 Word 文档，用户明确要求时生成红头文件；可信咨询能力面向政策法规、政务办事、税务社保、公积金、企业补贴、资质证照、行业标准、公共服务、合规义务等场景，输出带权威来源角标的答案并生成可点击溯源 HTML；可信检索能力用于权威材料检索、政策调研、城市政策对比、补贴与税惠材料核验、合规依据核验和深度搜索，交付直接答案、可点击溯源 HTML 和干净 Markdown；PPT 生成能力采用约束 SVG → 原生 DrawingML 编译架构，主 Agent 逐页手写 SVG、确定性编译器导出真实可编辑的原生 PowerPoint，内置党政简洁、数据图表、商务汇报、庄重典雅、培训课件 5 种风格预设，支持 16:9、4:3、小红书、朋友圈、竖版故事、A4 等 8 种画布规格。本技能全部事实素材都通过深知可信智能的权威文件库检索，可溯源到权威部门发布的规范性文件。"
 description_en: "dknowc office assistant is a comprehensive office-assistant Skill provided by dknowc Trusted Intelligence under Beijing Caizhi Technology Co., Ltd. It unifies official-document writing, trusted consultation, trusted retrieval, and native PPT generation in one Skill, with an extensible architecture for future capabilities. It supports drafting, rewriting, polishing, reviewing and generating structured workplace documents (including Word and red-head output); answering policy/regulation/government-service questions with citation markers and clickable provenance HTML; retrieving authoritative materials with deliverable of direct answer, provenance HTML and clean Markdown; plus native PPT generation through constrained-SVG-to-DrawingML compilation with multiple built-in styles (gov-simple, gov-data, business, formal, training) and eight canvas formats."
 category: "通用办公"
-version: "1.0.0"
+version: "1.1.0"
 author: "彩智科技"
 permissions:
   network:
@@ -41,10 +41,10 @@ secrets:
 
 | 能力 | 模块路径 | 核心脚本 | 使用的接口 | 主要交付物 | 典型触发场景 |
 | --- | --- | --- | --- | --- | --- |
-| 公文写作 | `doc-writer/` | `outline_reference.py`、`dkag_search.py`、`format_document.py`、`template_generator.py`、`source_note_html.py` | 范文大纲、深知搜索 | Word（可选红头）+ 可信溯源 HTML | 起草、改写、润色、审查、总结、方案、讲话稿等文种任务 |
-| 可信咨询 | `consulting/` | `gov_chat.py`、`render_trace_html.py` | 可信统一问答（credibleChat） | 带角标答案 + 可信溯源 HTML | 政策条件、能否办理、怎么办、材料清单、申请路径等问答 |
-| 可信检索 | `searching/` | `trusted_search.py`、`deep_query.py`、`render_policy_visualization.py` | 可信搜索、深度搜索 | 直接答案 + 溯源 HTML + 干净 Markdown（可选可视化） | 查依据、找材料、政策调研、城市对比、补贴核验、深度分析 |
-| PPT 生成 | `ppt-assistant/` | `svg_to_pptx.py`、`svg_quality_checker.py`、`trusted_search.py`、`render_trace_html.py` | 深知可信搜索（素材层）+ 本地 SVG→DrawingML 编译 | 原生可编辑 .pptx + 可信溯源 HTML | 汇报/宣讲/培训/数据 PPT，从需求直接生成或从已有材料提炼 |
+| 公文写作 | `doc-writer/` | `outline_reference.py`、`dkag_search.py`、`format_document.py`、`template_generator.py`、`source_note_html.py` | 范文大纲、深知搜索 | Word（可选红头）+ 可信核验报告 | 起草、改写、润色、审查、总结、方案、讲话稿等文种任务 |
+| 可信咨询 | `consulting/` | `gov_chat.py`、`render_trace_html.py` | 可信统一问答（credibleChat） | 带角标答案 + 可信核验报告 | 政策条件、能否办理、怎么办、材料清单、申请路径等问答 |
+| 可信检索 | `searching/` | `trusted_search.py`、`deep_query.py`、`render_policy_visualization.py` | 可信搜索、深度搜索 | 直接答案 + 可信核验报告 + 干净 Markdown（可选可视化） | 查依据、找材料、政策调研、城市对比、补贴核验、深度分析 |
+| PPT 生成 | `ppt-assistant/` | `svg_to_pptx.py`、`svg_quality_checker.py`、`trusted_search.py`、`render_trace_html.py` | 深知可信搜索（素材层）+ 本地 SVG→DrawingML 编译 | 原生可编辑 .pptx + 双版可信核验报告 | 汇报/宣讲/培训/数据 PPT，从需求直接生成或从已有材料提炼 |
 
 > **未来能力登记区**：新增能力时，在此表增加一行，并新增与四模块平级的能力模块子目录。
 
@@ -106,7 +106,7 @@ node {skillDir}/common/register_key.mjs register --phone <手机号> --vcode <�
 
 ## 能力一：公文写作
 
-模块路径：`doc-writer/`（v3.4.5）。任务详情与规则见 `doc-writer/reference/task_router.md`、`search_policy.md`、`fact_discipline.md`、`output_guide.md`、`revision_workflow.md` 等。
+模块路径：`doc-writer/`（v3.5.1）。任务详情与规则见 `doc-writer/reference/task_router.md`、`search_policy.md`、`fact_discipline.md`、`output_guide.md`、`revision_workflow.md` 等。
 
 ### 流程要点
 
@@ -120,7 +120,7 @@ node {skillDir}/common/register_key.mjs register --phone <手机号> --vcode <�
 
 ## 能力二：可信咨询
 
-模块路径：`consulting/`（v1.0.5）。本能力只通过可信统一问答接口回答咨询，不使用可信搜索/深度搜索/可视化流程。
+模块路径：`consulting/`（v1.1.0）。本能力只通过可信统一问答接口回答咨询，不使用可信搜索/深度搜索/可视化流程。
 
 标准流程：初始化门禁（要求 `search_ready=true`）→ 调用 `consulting/scripts/gov_chat.py "用户原始问题" --json-only --output official-docs/search-results/dknowc_consulting.json` → 读取 `data.resp.content`、`data.referenceMaterials` → 形成带角标最终答案（接口正文可用则直接用，需整理则存 `dknowc_consulting_answer.txt` 后仍保留真实角标）→ 生成溯源 HTML（`consulting/scripts/render_trace_html.py official-docs/search-results/dknowc_consulting.json --title "深知可信咨询可信溯源" --question "用户原始问题"`，有答案文件时传 `--answer-file`）→ 回复用户（先给答案保留角标，附本地 HTML 路径）。
 
@@ -128,7 +128,7 @@ node {skillDir}/common/register_key.mjs register --phone <手机号> --vcode <�
 
 ## 能力三：可信检索
 
-模块路径：`searching/`（v1.1.4）。默认调用可信搜索接口；深度搜索仅用户明确要求或确认升级后调用。
+模块路径：`searching/`（v1.1.5）。默认调用可信搜索接口；深度搜索仅用户明确要求或确认升级后调用。
 
 标准工作流：初始化门禁 → 判断追问（缺会改变结论的关键变量先问，否则先搜索）→ 可信搜索（`searching/scripts/trusted_search.py "问题" --service-area 单地域 --eff-time 单时间点 --json-only --output official-docs/search-results/dknowc_search.json`，复杂任务拆多次）→ 综合答案（关键结论挂真实 `[数字]` 角标，存 `dknowc_search_answer.txt`）→ 三件套交付（`searching/scripts/render_trace_html.py … --answer-file …` 同时生成 HTML 与 `.clean.md`）→ 回复用户（直接答案 + HTML 路径 + 干净 Markdown 路径 + 知识专库链接）→ 深度搜索邀约（说明耗时更长）。
 
@@ -136,14 +136,14 @@ node {skillDir}/common/register_key.mjs register --phone <手机号> --vcode <�
 
 ## 能力四：PPT 生成
 
-模块路径：`ppt-assistant/`（v1.0.3）。生成侧采用约束 SVG → 原生 DrawingML 编译架构（组件抽取自 ppt-master，MIT；声明见 `ppt-assistant/THIRD_PARTY_NOTICES.md`），内容侧用深知可信搜索。**完整运行时权威见 `ppt-assistant/workflows/generate-pptx.md`，路由细则见 `ppt-assistant/workflows/routing.md`。**
+模块路径：`ppt-assistant/`（v1.1.0）。生成侧采用约束 SVG → 原生 DrawingML 编译架构（组件抽取自 ppt-master，MIT；声明见 `ppt-assistant/THIRD_PARTY_NOTICES.md`），内容侧用深知可信搜索。**完整运行时权威见 `ppt-assistant/workflows/generate-pptx.md`（Step 1-9）；进入方式（主题/材料/材料免检索三模式）见本文件「任务路由」与该文件开头说明。**
 
 Generate 主线（v1 唯一路线）：
 
 ```
-初始化门禁 → [深知检索（主题模式）] → 内容包 →【结构方案确认门 ⛔】
+初始化门禁 → [深知检索（主题模式）] → 内容包 → 提纲版可信核验报告 →【结构方案确认门 ⛔】
 → 创建项目 → 逐页手写 SVG（P01 → 首页确认 ⛔ → 其余不间断）
-→ SVG 质检 → 编译导出 .pptx → 溯源 HTML → 交付
+→ SVG 质检 → 编译导出 .pptx → 成稿版可信核验报告 → 交付
 ```
 
 核心硬规则：
@@ -153,15 +153,16 @@ Generate 主线（v1 唯一路线）：
 3. **svg_output 是设计唯一来源**：主 Agent 按 `ppt-assistant/references/svg-authoring.md` 方言契约**逐页手写** SVG（P01 首页门→其余不间断），禁止脚本批量生成页面。
 4. **质检不过不导出**：`svg_quality_checker.py --quick-generate --stage final --json` 退出码 0 是导出前置条件；导出用 `uv run --with python-pptx --with XlsxWriter python3 ppt-assistant/scripts/svg_to_pptx.py projects/<项目> --quick-generate`，产物为原生可编辑 .pptx，不得降级为整页图片。
 5. **风格与画布**：5 种党政合规风格预设（党政简洁默认/数据图表/商务汇报/庄重典雅/培训课件，见 `ppt-assistant/references/style-presets.md`）+ 8 种画布（16:9/4:3/小红书/朋友圈/竖版/A4 等）。
-6. **溯源必附**：执行过检索时用 `ppt-assistant/scripts/render_trace_html.py` 生成溯源 HTML，与 .pptx 一并交付并说明其为辅助核验文件。
+6. **双版核验报告**：执行过检索时用 `ppt-assistant/scripts/render_trace_html.py` 生成两版核验报告——结构确认门前的**提纲版**（让用户逐条核验事实依据与口径事项）与交付前的**成稿版**（首屏核验报告单：依据溯源/引用绑定/时效检查/类型覆盖/自检五项指标）。报告必须以**核验通过状态**交付：可修复问题（角标未绑定/无角标/自检未记录）一律先修后交，仅不可抗力缺口允许温和提示；生成前硬校验拒绝无角标报告。
+6a. **首页预览页**：P01 完成后可用 `ppt-assistant/scripts/preview_slide_html.py` 把 svg_output 生成单文件 HTML 预览页供用户确认（宿主环境不能直接打开 .svg 时的标准路径）；交付物可用 `deliver_outputs.py` 复制到宿主工作区。
 7. **修改闭环**：检索 JSON ↔ 内容包 ↔ SVG 三者一致；调整先改内容包再改 SVG 再重导出，不直接改 .pptx。
 
 ## 统一交付物规范
 
 - **公文写作**：正式写作任务（含简单通知等短任务）默认交付 `.docx`，执行过搜索另附 HTML 可信溯源报告；仅用户明确要求对话输出正文时例外；不得先发正文初稿/预览版。
-- **可信咨询**：带角标答案 + 本地可点击溯源 HTML。
-- **可信检索**：直接答案 + 溯源 HTML + 干净 Markdown 三件套，可选深度搜索、可视化。
-- **PPT 生成**：原生可编辑 `.pptx` +（执行过检索时）溯源 HTML；不发 SVG 源/内容包草稿/质检报告等中间产物。
+- **可信咨询**：带角标答案 + 本地可点击可信核验报告（角标按引用顺序重编号，对话/报告/干净 Markdown 三处编号一致）。
+- **可信检索**：直接答案 + 可信核验报告 + 干净 Markdown 三件套（核验单只考核被引用素材；已核验为默认交付状态），可选深度搜索、可视化。
+- **PPT 生成**：原生可编辑 `.pptx` +（执行过检索时）提纲版与成稿版双份核验报告；不发 SVG 源/内容包草稿/质检报告等中间产物。
 - 交付时返回正式交付物路径 + 一句简短说明；执行过检索时明确主文件是正式成稿、溯源报告是辅助核验文件。
 
 ## 未来能力扩展指南

@@ -5,7 +5,7 @@
 - 上游项目：https://github.com/hugohe3/ppt-master
 - 作者：Hugo He
 - 许可证：MIT License（Copyright (c) 2025-2026 Hugo He）
-- 抽取范围：`skills/ppt-master/scripts/` 下的 `svg_to_pptx`、`pptx_shapes`、`svg_quality`、`svg_finalize`、`pptx_animations`、`pptx_transitions`、`pptx_to_svg`、`native_payloads`、`language_tags`、`hyperlink_contract`、`config`、`project_utils`、`resource_paths`、`slide_roster`、`update_spec`、`error_helper`、`pptx_effects`、`pptx_opc_validation` 及其入口脚本与数据文件。（曾抽取的 `register_template` 与上游示例文件因包体精简移除。）
+- 抽取范围：`skills/ppt-master/scripts/` 下的 `svg_to_pptx`、`pptx_shapes`、`svg_quality`、`svg_finalize`、`pptx_animations`、`pptx_transitions`、`pptx_to_svg`、`native_payloads`、`language_tags`、`hyperlink_contract`、`config`、`project_utils`、`resource_paths`、`slide_roster`、`update_spec`、`error_helper`、`pptx_effects`、`pptx_opc_validation`、`register_template` 及其入口脚本与数据文件；示例文件来自 `examples/ppt169_swiss_grid_systems`（存放于 `references/upstream-example/`）。
 
 MIT 许可证原文：
 
