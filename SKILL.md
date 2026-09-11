@@ -7,7 +7,7 @@ description: "深知晓办公助手，是由北京彩智科技有限公司旗下
 description_zh: "深知晓办公助手，是由北京彩智科技有限公司旗下“深知可信智能”提供的综合办公助手，统一覆盖公文写作、可信咨询、可信检索、PPT 生成四大类办公场景，并可持续扩展更多能力。公文写作能力按公文国家标准支持通知、请示、报告、函、复函、批复、会议纪要、通报、通告、公告、意见、方案、总结、管理办法、汇报材料、发言稿、讲话稿、调研报告、经验材料等常见文种和工作材料，正式交付生成 Word 文档，用户明确要求时生成红头文件；可信咨询能力面向政策法规、政务办事、税务社保、公积金、企业补贴、资质证照、行业标准、公共服务、合规义务等场景，输出带权威来源角标的答案并生成可点击溯源 HTML；可信检索能力用于权威材料检索、政策调研、城市政策对比、补贴与税惠材料核验、合规依据核验和深度搜索，交付直接答案、可点击溯源 HTML 和干净 Markdown；PPT 生成能力采用约束 SVG → 原生 DrawingML 编译架构，主 Agent 逐页手写 SVG、确定性编译器导出真实可编辑的原生 PowerPoint，内置党政简洁、数据图表、商务汇报、庄重典雅、培训课件 5 种风格预设，支持 16:9、4:3、小红书、朋友圈、竖版故事、A4 等 8 种画布规格。本技能全部事实素材都通过深知可信智能的权威文件库检索，可溯源到权威部门发布的规范性文件。"
 description_en: "dknowc office assistant is a comprehensive office-assistant Skill provided by dknowc Trusted Intelligence under Beijing Caizhi Technology Co., Ltd. It unifies official-document writing, trusted consultation, trusted retrieval, and native PPT generation in one Skill, with an extensible architecture for future capabilities. It supports drafting, rewriting, polishing, reviewing and generating structured workplace documents (including Word and red-head output); answering policy/regulation/government-service questions with citation markers and clickable provenance HTML; retrieving authoritative materials with deliverable of direct answer, provenance HTML and clean Markdown; plus native PPT generation through constrained-SVG-to-DrawingML compilation with multiple built-in styles (gov-simple, gov-data, business, formal, training) and eight canvas formats."
 category: "通用办公"
-version: "1.2.0"
+version: "1.2.1"
 author: "彩智科技"
 permissions:
   network:
@@ -62,7 +62,7 @@ python3 {skillDir}/common/initialize.py
 
 **API Key 是按需前置条件**：
 
-- **需要 Key**：可信咨询域、可信检索域，以及公文写作域中需要政策依据/数据/案例检索的任务、PPT 生成域的主题模式与材料补检索模式。要求 `api_key_configured=true`、`search_ready=true`；不满足时暂停任务，按「统一 API Key 管理」引导（自然表达，不暴露 MaaS/API Key/环境变量等内部术语），不得改用外部搜索。
+- **需要 Key**：可信咨询域、可信检索域，以及公文写作域中需要政策依据/数据/案例检索的任务、PPT 生成域的主题模式与材料补检索模式。要求 `api_key_configured=true`、`search_ready=true`；不满足时暂停任务，按「统一 API Key 管理」引导（用自然语言表达，如「开通搜索功能」；用户主动询问技术细节时如实说明），不得改用外部搜索。
 - **不需要 Key**：公文写作域的简单通知、改写、润色、审查、基于用户材料写作、只生成 Word；PPT 生成域的材料免检索模式（用户明确「不用查，就用我给的材料」）。
 
 **能力专属依赖（缺失不阻断其他能力）**：
