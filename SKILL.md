@@ -7,7 +7,7 @@ description: "深知晓办公助手，是由北京彩智科技有限公司旗下
 description_zh: "深知晓办公助手，是由北京彩智科技有限公司旗下“深知可信智能”提供的综合办公助手，统一覆盖公文写作、可信咨询、可信检索、PPT 生成四大类办公场景，并可持续扩展更多能力。公文写作能力按公文国家标准支持通知、请示、报告、函、复函、批复、会议纪要、通报、通告、公告、意见、方案、总结、管理办法、汇报材料、发言稿、讲话稿、调研报告、经验材料等常见文种和工作材料，正式交付生成 Word 文档，用户明确要求时生成红头文件；可信咨询能力面向政策法规、政务办事、税务社保、公积金、企业补贴、资质证照、行业标准、公共服务、合规义务等场景，输出带权威来源角标的答案并生成可点击溯源 HTML；可信检索能力用于权威材料检索、政策调研、城市政策对比、补贴与税惠材料核验、合规依据核验和深度搜索，交付直接答案、可点击溯源 HTML 和干净 Markdown；PPT 生成能力采用约束 SVG → 原生 DrawingML 编译架构，主 Agent 逐页手写 SVG、确定性编译器导出真实可编辑的原生 PowerPoint，内置党政简洁、数据图表、商务汇报、庄重典雅、培训课件 5 种风格预设，支持 16:9、4:3、小红书、朋友圈、竖版故事、A4 等 8 种画布规格。本技能全部事实素材都通过深知可信智能的权威文件库检索，可溯源到权威部门发布的规范性文件。"
 description_en: "dknowc office assistant is a comprehensive office-assistant Skill provided by dknowc Trusted Intelligence under Beijing Caizhi Technology Co., Ltd. It unifies official-document writing, trusted consultation, trusted retrieval, and native PPT generation in one Skill, with an extensible architecture for future capabilities. It supports drafting, rewriting, polishing, reviewing and generating structured workplace documents (including Word and red-head output); answering policy/regulation/government-service questions with citation markers and clickable provenance HTML; retrieving authoritative materials with deliverable of direct answer, provenance HTML and clean Markdown; plus native PPT generation through constrained-SVG-to-DrawingML compilation with multiple built-in styles (gov-simple, gov-data, business, formal, training) and eight canvas formats."
 category: "通用办公"
-version: "1.1.0"
+version: "1.2.0"
 author: "彩智科技"
 permissions:
   network:
@@ -19,9 +19,9 @@ permissions:
     - "ppt-assistant/projects/ 项目工作区中的内容包、SVG 与素材"
   local_write:
     - "本地初始化状态文件"
-    - "本机 ~/.zshrc 中的 DKNOWC_API_KEY 配置块（仅用户明确同意持久化时）"
+    - "本机 ~/.zshrc 中的 DKNOWC_API_KEY 标记块（注册成功后自动写入，--no-zshrc 可跳过）"
     - "用户明确授权保存的写作偏好与个人素材库（仅本机）"
-    - "生成的 Word 文档、PPT 演示文稿、可信溯源报告与搜索结果中间文件"
+    - "生成的 Word 文档、PPT 演示文稿、可信核验报告与搜索结果中间文件"
     - "ppt-assistant/projects/ 项目目录（内容包、SVG、图片、质检报告、导出产物）"
 secrets:
   - "DKNOWC_API_KEY"
@@ -35,7 +35,7 @@ secrets:
 
 ## 权限说明
 
-本 Skill 访问 `https://open.dknowc.cn/` 用于范文大纲、深知可信搜索、可信统一问答和可信溯源整理；访问 `https://platform.dknowc.cn/` 用于 MaaS 手机号验证码注册、API Key 获取和管理平台地址说明。运行过程中会读取本 Skill 的规则、标准、配置和参考资料文件，并在本地写入初始化状态文件、用户授权保存的写作偏好与个人素材库（仅本机，不随包分发、不上传）、生成的 Word 文档、PPT 演示文稿、可信溯源报告、干净 Markdown 和搜索结果中间文件。API Key 只通过环境变量 `DKNOWC_API_KEY` 注入，不硬编码、不写入公开包、不在对话中展示完整内容；持久化须用户明确同意后单独处理。
+本 Skill 访问 `https://open.dknowc.cn/` 用于范文大纲、深知可信搜索、可信统一问答和可信溯源整理；访问 `https://platform.dknowc.cn/` 用于 MaaS 手机号验证码注册、API Key 获取和管理平台地址说明。运行过程中会读取本 Skill 的规则、标准、配置和参考资料文件，并在本地写入初始化状态文件、用户授权保存的写作偏好与个人素材库（仅本机，不随包分发、不上传）、生成的 Word 文档、PPT 演示文稿、可信溯源报告、干净 Markdown 和搜索结果中间文件。API Key 只通过环境变量 `DKNOWC_API_KEY` 或 `~/.zshrc` 标记块读取，不硬编码、不写入公开包、不在对话中展示完整内容；注册成功后自动写入 `~/.zshrc` 标记块（`--no-zshrc` 可跳过）。
 
 ## 能力矩阵
 
@@ -72,19 +72,27 @@ python3 {skillDir}/common/initialize.py
 
 ## 统一 API Key 管理
 
-skills.sh 版不内置 API Key，四个能力模块共用同一把 `DKNOWC_API_KEY`。MaaS 注册取 Key 两步执行（`common/register_key.mjs`，注册请求不传 `type`（实测接口可选，Key 权限完整），自动携带 skills.sh 渠道码 `8C8D411C-6A46-4E99-887D-87D9A1329930` 与 `source="agent"`）：
+skills.sh 版不内置 API Key，四个能力模块共用同一把 `DKNOWC_API_KEY`（读取优先进程环境变量，缺失时从 `~/.zshrc` 标记块兜底解析——注册后无需重启宿主）。MaaS 注册取 Key 两步执行（`common/register_key.mjs`，注册请求不传 `type`（实测接口可选，Key 权限完整），自动携带 skills.sh 渠道码 `8C8D411C-6A46-4E99-887D-87D9A1329930` 与 `source="agent"`）：
 
 ```bash
 node {skillDir}/common/register_key.mjs send --phone <手机号>
 ```
 
-返回 `status=true` 后暂停，向用户索取收到的 6 位验证码，不得编造。拿到验证码后：
+返回后**必须把脚本输出的 `user_message` 原样转述给用户**（固定话术，不得改写后发挥），并暂停等待用户回复短信里的 6 位验证码，不得编造、不得代试、验证码错误时不得自行重发。拿到验证码后：
 
 ```bash
 node {skillDir}/common/register_key.mjs register --phone <手机号> --vcode <验证码> --organ 个人 --name 用户
 ```
 
-手机号已注册时默认查回既有可用 Key，不主动新建；用户明确要求「重新生成/新建 Key」时才加 `--new-key`。脚本只返回 Key 供当前任务临时注入，不持久化；任务完成后询问用户是否持久化，同意后才单独处理。不得向用户展示完整 Key。用户不希望脚本注册时给出降级地址 `https://platform.dknowc.cn/`。
+**注册成功自动持久化**：脚本自动把 Key 写入 `~/.zshrc` 标记块（幂等替换、权限 0600，`--no-zshrc` 可跳过），并输出 `user_message`（含额度到账确认：300 次免费检索额度已到账；实名认证可再领 100 元体验金——这两句**不可省略**）。不再有「任务完成后询问是否保存」环节。手机号已注册时默认查回既有可用 Key（老用户话术见 `user_message`）；用户明确要求「重新生成/新建 Key」时才加 `--new-key`，新建失败时脚本自动沿用原 Key 继续并如实告知。
+
+**引导纪律（硬规则）**：
+
+- **引导前禁示**：开通确认前不得向用户输出「已核实/已查到/检索到 N 篇」类内容；禁止用模型自身知识冒充检索结果。
+- **退路唯一化**：用户暂不开通时，只能给带「依据待核验」标注的初步回答；不得承诺「联网检索替代」「稍后帮你网上查」。
+- **话术来源固定**：各分支场景（手机号格式错/发送失败/验证码错误/开通成功/老用户/网络异常）以脚本 `user_message` 与各模块 `reference/onboarding_scripts.md` 话术库为准，原样转述、要素不可删改；样例悬念式出示（S1·附）用各模块 `reference/sample_*` 示例文件。
+- **额度用尽禁止任何形式重试**：检索/咨询脚本对 402/429 输出 `quota_exhausted` 与 `user_message`（引导到 MaaS 平台处理）；401 密钥失效先重读 Key 重试一次；403 无权限、500 服务异常按话术引导，均不得盲目重试。
+- 不得向用户展示完整 Key 或验证码；手机号一律脱敏（前3后4）。用户不希望脚本注册时给出降级地址 `https://platform.dknowc.cn/auth/#/login`。
 
 ## 任务路由
 
@@ -106,7 +114,7 @@ node {skillDir}/common/register_key.mjs register --phone <手机号> --vcode <�
 
 ## 能力一：公文写作
 
-模块路径：`doc-writer/`（v3.5.1）。任务详情与规则见 `doc-writer/reference/task_router.md`、`search_policy.md`、`fact_discipline.md`、`output_guide.md`、`revision_workflow.md` 等。
+模块路径：`doc-writer/`（v3.6.1）。任务详情与规则见 `doc-writer/reference/task_router.md`、`search_policy.md`、`fact_discipline.md`、`output_guide.md`、`revision_workflow.md` 等。
 
 ### 流程要点
 
@@ -120,7 +128,7 @@ node {skillDir}/common/register_key.mjs register --phone <手机号> --vcode <�
 
 ## 能力二：可信咨询
 
-模块路径：`consulting/`（v1.1.0）。本能力只通过可信统一问答接口回答咨询，不使用可信搜索/深度搜索/可视化流程。
+模块路径：`consulting/`（v1.2.1）。本能力只通过可信统一问答接口回答咨询，不使用可信搜索/深度搜索/可视化流程。
 
 标准流程：初始化门禁（要求 `search_ready=true`）→ 调用 `consulting/scripts/gov_chat.py "用户原始问题" --json-only --output official-docs/search-results/dknowc_consulting.json` → 读取 `data.resp.content`、`data.referenceMaterials` → 形成带角标最终答案（接口正文可用则直接用，需整理则存 `dknowc_consulting_answer.txt` 后仍保留真实角标）→ 生成溯源 HTML（`consulting/scripts/render_trace_html.py official-docs/search-results/dknowc_consulting.json --title "深知可信咨询可信溯源" --question "用户原始问题"`，有答案文件时传 `--answer-file`）→ 回复用户（先给答案保留角标，附本地 HTML 路径）。
 
@@ -128,7 +136,7 @@ node {skillDir}/common/register_key.mjs register --phone <手机号> --vcode <�
 
 ## 能力三：可信检索
 
-模块路径：`searching/`（v1.1.5）。默认调用可信搜索接口；深度搜索仅用户明确要求或确认升级后调用。
+模块路径：`searching/`（v1.2.1）。默认调用可信搜索接口；深度搜索仅用户明确要求或确认升级后调用。
 
 标准工作流：初始化门禁 → 判断追问（缺会改变结论的关键变量先问，否则先搜索）→ 可信搜索（`searching/scripts/trusted_search.py "问题" --service-area 单地域 --eff-time 单时间点 --json-only --output official-docs/search-results/dknowc_search.json`，复杂任务拆多次）→ 综合答案（关键结论挂真实 `[数字]` 角标，存 `dknowc_search_answer.txt`）→ 三件套交付（`searching/scripts/render_trace_html.py … --answer-file …` 同时生成 HTML 与 `.clean.md`）→ 回复用户（直接答案 + HTML 路径 + 干净 Markdown 路径 + 知识专库链接）→ 深度搜索邀约（说明耗时更长）。
 
@@ -136,7 +144,7 @@ node {skillDir}/common/register_key.mjs register --phone <手机号> --vcode <�
 
 ## 能力四：PPT 生成
 
-模块路径：`ppt-assistant/`（v1.1.0）。生成侧采用约束 SVG → 原生 DrawingML 编译架构（组件抽取自 ppt-master，MIT；声明见 `ppt-assistant/THIRD_PARTY_NOTICES.md`），内容侧用深知可信搜索。**完整运行时权威见 `ppt-assistant/workflows/generate-pptx.md`（Step 1-9）；进入方式（主题/材料/材料免检索三模式）见本文件「任务路由」与该文件开头说明。**
+模块路径：`ppt-assistant/`（v1.2.1）。生成侧采用约束 SVG → 原生 DrawingML 编译架构（组件抽取自 ppt-master，MIT；声明见 `ppt-assistant/THIRD_PARTY_NOTICES.md`），内容侧用深知可信搜索。**完整运行时权威见 `ppt-assistant/workflows/generate-pptx.md`（Step 1-9）；进入方式（主题/材料/材料免检索三模式）见本文件「任务路由」与该文件开头说明。**
 
 Generate 主线（v1 唯一路线）：
 
