@@ -7,7 +7,7 @@ description: "深知晓办公助手，是由北京彩智科技有限公司旗下
 description_zh: "深知晓办公助手，是由北京彩智科技有限公司旗下“深知可信智能”提供的综合办公助手，统一覆盖公文写作、可信咨询、可信检索、PPT 生成四大类办公场景，并可持续扩展更多能力。公文写作能力按公文国家标准支持通知、请示、报告、函、复函、批复、会议纪要、通报、通告、公告、意见、方案、总结、管理办法、汇报材料、发言稿、讲话稿、调研报告、经验材料等常见文种和工作材料，正式交付生成 Word 文档，用户明确要求时生成红头文件；可信咨询能力面向政策法规、政务办事、税务社保、公积金、企业补贴、资质证照、行业标准、公共服务、合规义务等场景，输出带权威来源角标的答案并生成可点击溯源 HTML；可信检索能力用于权威材料检索、政策调研、城市政策对比、补贴与税惠材料核验、合规依据核验和深度搜索，交付直接答案、可点击溯源 HTML 和干净 Markdown；PPT 生成能力采用约束 SVG → 原生 DrawingML 编译架构，主 Agent 逐页手写 SVG、确定性编译器导出真实可编辑的原生 PowerPoint，内置党政简洁、数据图表、商务汇报、庄重典雅、培训课件 5 种风格预设，支持 16:9、4:3、小红书、朋友圈、竖版故事、A4 等 8 种画布规格。本技能全部事实素材都通过深知可信智能的权威文件库检索，可溯源到权威部门发布的规范性文件。"
 description_en: "dknowc office assistant is a comprehensive office-assistant Skill provided by dknowc Trusted Intelligence under Beijing Caizhi Technology Co., Ltd. It unifies official-document writing, trusted consultation, trusted retrieval, and native PPT generation in one Skill, with an extensible architecture for future capabilities. It supports drafting, rewriting, polishing, reviewing and generating structured workplace documents (including Word and red-head output); answering policy/regulation/government-service questions with citation markers and clickable provenance HTML; retrieving authoritative materials with deliverable of direct answer, provenance HTML and clean Markdown; plus native PPT generation through constrained-SVG-to-DrawingML compilation with multiple built-in styles (gov-simple, gov-data, business, formal, training) and eight canvas formats."
 category: "通用办公"
-version: "1.2.1"
+version: "1.3.0"
 author: "彩智科技"
 permissions:
   network:
@@ -84,7 +84,7 @@ node {skillDir}/common/register_key.mjs send --phone <手机号>
 node {skillDir}/common/register_key.mjs register --phone <手机号> --vcode <验证码> --organ 个人 --name 用户
 ```
 
-**注册成功自动持久化**：脚本自动把 Key 写入 `~/.zshrc` 标记块（幂等替换、权限 0600，`--no-zshrc` 可跳过），并输出 `user_message`（含额度到账确认：300 次免费检索额度已到账；实名认证可再领 100 元体验金——这两句**不可省略**）。不再有「任务完成后询问是否保存」环节。手机号已注册时默认查回既有可用 Key（老用户话术见 `user_message`）；用户明确要求「重新生成/新建 Key」时才加 `--new-key`，新建失败时脚本自动沿用原 Key 继续并如实告知。
+**注册成功自动持久化**：脚本自动把 Key 写入 `~/.zshrc` 标记块（幂等替换、权限 0600，`--no-zshrc` 可跳过），并输出 `user_message`（含额度到账确认：300 次免费检索额度已到账——这句**不可省略**）。不再有「任务完成后询问是否保存」环节。手机号已注册时默认查回既有可用 Key（老用户话术见 `user_message`）；用户明确要求「重新生成/新建 Key」时才加 `--new-key`，新建失败时脚本自动沿用原 Key 继续并如实告知。
 
 **引导纪律（硬规则）**：
 
@@ -114,37 +114,37 @@ node {skillDir}/common/register_key.mjs register --phone <手机号> --vcode <�
 
 ## 能力一：公文写作
 
-模块路径：`doc-writer/`（v3.6.1）。任务详情与规则见 `doc-writer/reference/task_router.md`、`search_policy.md`、`fact_discipline.md`、`output_guide.md`、`revision_workflow.md` 等。
+模块路径：`doc-writer/`（v3.7.0）。任务详情与规则见 `doc-writer/reference/task_router.md`、`search_policy.md`、`fact_discipline.md`、`output_guide.md`、`revision_workflow.md` 等。
 
 ### 流程要点
 
 1. **任务路由**：先读 `doc-writer/reference/task_router.md` 判断简单/常规/复杂/高风险任务。
 2. **范文大纲**：正式写作需求进入搜索或正文生成前，优先调用 `doc-writer/scripts/outline_reference.py "用户写作需求" --output outline_任务名.json`（用完整原始表述）；`outline_available=true` 时向用户展示「建议大纲 + 搜索建议」并等待确认，`false` 时忽略该能力按原流程继续。
-3. **素材检索**：需要政策依据/数据/案例时才搜索，逻辑遵循 `doc-writer/reference/search_policy.md`：设计搜索方案（覆盖政策依据/数据支撑/参考案例，表述参考不单列）→ 展示方案并等用户确认（不出现脚本参数名）→ 确认后**串行**执行 `dkag_search.py "搜索词" --area 地域 --time 时间 --purpose "搜索目的" --clean --output result_地域.json` → 素材四分类整理。禁止并发检索；异常时停止并请用户确认下一步。
+3. **素材检索**：需要政策依据/数据/案例时才搜索，逻辑遵循 `doc-writer/reference/search_policy.md`：设计搜索方案（覆盖政策依据/数据支撑/参考案例，表述参考不单列）→ 展示方案并等用户确认（不出现脚本参数名）→ 确认后**串行**执行 `dkag_search.py "搜索词" --area 地域 --time 时间 --purpose "搜索目的" --clean --output result_地域.json` → 素材四分类整理。禁止并发检索；异常时停止并请用户确认下一步。文种/题材写法需要范文参考时（不常见综合文稿、用户初次尝试的文种、官方材料缺可借鉴行文结构），在方案中**主动列入「文风体例参考」一路**（`--search-channel webSearch`，全网非官方材料，只学结构句式、不搬内容，不进正文事实层与溯源报告；政策依据与数据严禁使用该通道），无需等用户提出。
 4. **写作**：按文种读取 `doc-writer/reference/standards/` 对应标准；生成正文前按 `fact_discipline.md` 约束事实边界；长篇材料另读 `99_expressions.md` 并按 `anti_ai_patterns.md` 做语言复核；素材进入正文按 `material_usage_guidance.md`。正文不加引用角标，溯源信息单独 HTML。
 5. **审查**：执行过搜索、请示/复函/政策依据型报告、长篇材料、用户要求 Word/红头/明确要求检查时，按 `review_checklist.md` 审查；可选用 `prose_lint.py` 做语言质检。
-6. **Word 交付**：默认交付 `.docx`（正文先写入 `doc-writer/official-docs/input/` 临时文件再调 `format_document.py official-docs/input/xxx.txt`）；仅用户明确要求红头时调 `template_generator.py`；普通 Word 末尾保留 `【AI生成提示】内容由AI生成，内容仅供参考。`；不支持 PDF 自动生成。执行过搜索时另用 `source_note_html.py` 生成 `标题_可信溯源报告.html`。
+6. **Word 交付**：默认交付 `.docx`（正文先写入 `doc-writer/official-docs/input/` 临时文件再调 `format_document.py official-docs/input/xxx.txt`）；仅用户明确要求红头时调 `template_generator.py`；普通 Word 末尾保留 `【AI生成提示】内容由AI生成，内容仅供参考。`；不支持 PDF 自动生成。执行过搜索时另用 `source_note_html.py` 生成 `标题_可信溯源报告.html`（生成时自动检测原文链接活性——404/410/软404 标记失效，`--skip-link-check` 可跳过；原文失效时以接口存档快照兜底回看，policyFiles 发文字号自动上卡展示）。
 7. **本地记忆（可选）**：用户明确要求保存素材或偏好时，用 `doc-writer/scripts/local_memory.py` 的 `kb`（素材库）/`pref`（写作偏好）子命令管理，仅本机生效、不随包分发。
 
 ## 能力二：可信咨询
 
-模块路径：`consulting/`（v1.2.1）。本能力只通过可信统一问答接口回答咨询，不使用可信搜索/深度搜索/可视化流程。
+模块路径：`consulting/`（v1.3.0）。本能力只通过可信统一问答接口回答咨询，不使用可信搜索/深度搜索/可视化流程。
 
-标准流程：初始化门禁（要求 `search_ready=true`）→ 调用 `consulting/scripts/gov_chat.py "用户原始问题" --json-only --output official-docs/search-results/dknowc_consulting.json` → 读取 `data.resp.content`、`data.referenceMaterials` → 形成带角标最终答案（接口正文可用则直接用，需整理则存 `dknowc_consulting_answer.txt` 后仍保留真实角标）→ 生成溯源 HTML（`consulting/scripts/render_trace_html.py official-docs/search-results/dknowc_consulting.json --title "深知可信咨询可信溯源" --question "用户原始问题"`，有答案文件时传 `--answer-file`）→ 回复用户（先给答案保留角标，附本地 HTML 路径）。
+标准流程：初始化门禁（要求 `search_ready=true`）→ 调用 `consulting/scripts/gov_chat.py "用户原始问题" --json-only --output official-docs/search-results/dknowc_consulting.json` → 读取 `data.resp.content`、`data.referenceMaterials` → 形成带角标最终答案（接口正文可用则直接用，需整理则存 `dknowc_consulting_answer.txt` 后仍保留真实角标）→ **答案自检**（生成报告前完成五项检查并如实写入 `official-docs/search-results/dknowc_consulting_selfcheck.json`：角标存在 / 角标对应来源 / 结论可核验 / 答案一致 / 来源清单覆盖）→ 生成溯源 HTML（`consulting/scripts/render_trace_html.py official-docs/search-results/dknowc_consulting.json --title "深知可信咨询核验报告" --question "用户原始问题" --self-check-file official-docs/search-results/dknowc_consulting_selfcheck.json`，有答案文件时传 `--answer-file`；脚本同时生成同名 `.clean.md` 干净 Markdown，并输出重编号最终答案与对话来源清单——对话正文与来源清单**必须直接使用这些输出**）→ 回复用户（先给答案保留角标，附本地 HTML 路径与干净 Markdown 路径）。脚本生成前硬校验：无角标、角标未绑定材料、自检缺失或未全部通过均拒绝生成，须修正后重跑，不得带问题交付。宿主环境（WorkBuddy 等）交付前一律执行 `consulting/scripts/deliver_outputs.py <HTML> <clean.md>` 把产出物复制到宿主工作区，向用户展示脚本返回的 delivered 路径。
 
-红线：角标必须与接口材料真实对应，找不到依据时删除结论/标「需进一步核验」/重新调用补证；每次调用后默认生成 HTML（用户明确拒绝才跳过）；不向用户输出接口侧溯源链接。
+红线：角标必须与接口材料真实对应，找不到依据时删除结论/标「需进一步核验」/重新调用补证；每次调用后默认生成 HTML（用户明确拒绝才跳过）；不向用户输出接口侧溯源链接。溯源 HTML 自动检测原文链接活性（404/410 标记失效，`--skip-link-check` 可跳过）；咨询接口无存档快照，原文失效时回退知识专库链接或如实标注。
 
 ## 能力三：可信检索
 
-模块路径：`searching/`（v1.2.1）。默认调用可信搜索接口；深度搜索仅用户明确要求或确认升级后调用。
+模块路径：`searching/`（v1.3.1）。默认调用可信搜索接口；深度搜索仅用户明确要求或确认升级后调用。
 
 标准工作流：初始化门禁 → 判断追问（缺会改变结论的关键变量先问，否则先搜索）→ 可信搜索（`searching/scripts/trusted_search.py "问题" --service-area 单地域 --eff-time 单时间点 --json-only --output official-docs/search-results/dknowc_search.json`，复杂任务拆多次）→ 综合答案（关键结论挂真实 `[数字]` 角标，存 `dknowc_search_answer.txt`）→ 三件套交付（`searching/scripts/render_trace_html.py … --answer-file …` 同时生成 HTML 与 `.clean.md`）→ 回复用户（直接答案 + HTML 路径 + 干净 Markdown 路径 + 知识专库链接）→ 深度搜索邀约（说明耗时更长）。
 
-红线：`query` 聚焦单一目的、`eff_time` 只传一个时间值、`service_area` 只传一个地域；不得伪造/误配/泛配角标；用户明确说「不要 HTML/文件」才跳过文件交付；可视化仅用户明确要求图表时按 `render_policy_visualization.py` 流程生成。
+红线：`query` 聚焦单一目的、`eff_time` 只传一个时间值、`service_area` 只传一个地域；不得伪造/误配/泛配角标；用户明确说「不要 HTML/文件」才跳过文件交付；可视化仅用户明确要求图表时按 `render_policy_visualization.py` 流程生成。`trusted_search.py` 默认返回**完整集**（`simplified=false`，含存档快照 screenShotPath，供核验报告原文失效时兜底回看；`--simplified` 会剔除部分材料并丢失快照，生成核验报告时不建议使用）；溯源报告自动检测原文链接活性（404/410/软404 标记失效）并以快照兜底（`--skip-link-check` 可跳过）。
 
 ## 能力四：PPT 生成
 
-模块路径：`ppt-assistant/`（v1.2.1）。生成侧采用约束 SVG → 原生 DrawingML 编译架构（组件抽取自 ppt-master，MIT；声明见 `ppt-assistant/THIRD_PARTY_NOTICES.md`），内容侧用深知可信搜索。**完整运行时权威见 `ppt-assistant/workflows/generate-pptx.md`（Step 1-9）；进入方式（主题/材料/材料免检索三模式）见本文件「任务路由」与该文件开头说明。**
+模块路径：`ppt-assistant/`（v1.3.0）。生成侧采用约束 SVG → 原生 DrawingML 编译架构（组件抽取自 ppt-master，MIT；声明见 `ppt-assistant/THIRD_PARTY_NOTICES.md`），内容侧用深知可信搜索。**完整运行时权威见 `ppt-assistant/workflows/generate-pptx.md`（Step 1-9）；进入方式（主题/材料/材料免检索三模式）见本文件「任务路由」与该文件开头说明。**
 
 Generate 主线（v1 唯一路线）：
 
@@ -161,7 +161,7 @@ Generate 主线（v1 唯一路线）：
 3. **svg_output 是设计唯一来源**：主 Agent 按 `ppt-assistant/references/svg-authoring.md` 方言契约**逐页手写** SVG（P01 首页门→其余不间断），禁止脚本批量生成页面。
 4. **质检不过不导出**：`svg_quality_checker.py --quick-generate --stage final --json` 退出码 0 是导出前置条件；导出用 `uv run --with python-pptx --with XlsxWriter python3 ppt-assistant/scripts/svg_to_pptx.py projects/<项目> --quick-generate`，产物为原生可编辑 .pptx，不得降级为整页图片。
 5. **风格与画布**：5 种党政合规风格预设（党政简洁默认/数据图表/商务汇报/庄重典雅/培训课件，见 `ppt-assistant/references/style-presets.md`）+ 8 种画布（16:9/4:3/小红书/朋友圈/竖版/A4 等）。
-6. **双版核验报告**：执行过检索时用 `ppt-assistant/scripts/render_trace_html.py` 生成两版核验报告——结构确认门前的**提纲版**（让用户逐条核验事实依据与口径事项）与交付前的**成稿版**（首屏核验报告单：依据溯源/引用绑定/时效检查/类型覆盖/自检五项指标）。报告必须以**核验通过状态**交付：可修复问题（角标未绑定/无角标/自检未记录）一律先修后交，仅不可抗力缺口允许温和提示；生成前硬校验拒绝无角标报告。
+6. **双版核验报告**：执行过检索时用 `ppt-assistant/scripts/render_trace_html.py` 生成两版核验报告——结构确认门前的**提纲版**（让用户逐条核验事实依据与口径事项）与交付前的**成稿版**（首屏核验报告单：依据溯源/引用绑定/时效检查/类型覆盖/自检五项指标）。报告自动检测原文链接活性（404/410/软404，属正常耗时，可 `--skip-link-check` 跳过）并以接口存档快照兜底回看；合并 JSON 兼容原始接口嵌套形态，`snapshot_url`/`快照链接`/`source_url` 字段均识别。报告必须以**核验通过状态**交付：可修复问题（角标未绑定/无角标/自检未记录）一律先修后交，仅不可抗力缺口允许温和提示；生成前硬校验拒绝无角标报告。
 6a. **首页预览页**：P01 完成后可用 `ppt-assistant/scripts/preview_slide_html.py` 把 svg_output 生成单文件 HTML 预览页供用户确认（宿主环境不能直接打开 .svg 时的标准路径）；交付物可用 `deliver_outputs.py` 复制到宿主工作区。
 7. **修改闭环**：检索 JSON ↔ 内容包 ↔ SVG 三者一致；调整先改内容包再改 SVG 再重导出，不直接改 .pptx。
 

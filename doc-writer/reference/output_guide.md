@@ -153,7 +153,7 @@ python3 scripts/format_document.py \
 异常处理：
 - 如当前环境无法运行 `python3`，或初始化结果显示 `ready=false`、`python_docx=false`、`requests=false`，必须暂停，不得继续执行搜索、写作、Word、红头或溯源核验报告 HTML 生成。
 - 缺失 `python-docx` 或 `requests` 时，先向用户说明影响；经用户同意后，可执行 `python3 -m pip install python-docx requests` 安装依赖，安装后重新运行初始化检查。未经用户同意不得自行安装。
-- 如用户不同意安装依赖，执行 `python3 scripts/initialize.py --decline-dependency-install` 记录拒绝状态，后续不再反复询问，但仍因缺少必备依赖暂停相关能力。
+- 如用户不同意安装依赖，执行 `python3 common/initialize.py --decline-dependency-install` 记录拒绝状态，后续不再反复询问，但仍因缺少必备依赖暂停相关能力。
 - 如缺少 Python 或运行环境无权限安装依赖，提示用户切换到具备 Python 的 Agent/运行环境，或由用户/平台管理员先完成安装。
 - 仅当任务需要深知搜索且初始化结果显示 `api_key_configured=false` 或 `search_ready=false` 时，才暂停并引导用户完成 MaaS 注册获取 Key；注册脚本会将 `DKNOWC_API_KEY` 写入本机 `~/.zshrc`，当前任务使用脚本返回的 Key 临时注入环境变量继续初始化。需要搜索时先向用户说明搜索能力价值：深知公文写作可在覆盖 600 万篇公开规范性文件的权威资料库中边查边写，提供准确的最新情况分析与最新政策依据。不需要搜索的写作任务（简单通知、改写润色、只生成 Word、仅基于用户材料写作）即使未配置 API Key 也可正常继续。
 - 字体不作为初始化阻断项，不主动检测、安装或引导用户安装字体。Word 文档会写入公文常用字体名称；打开端如缺少对应字体，Word/WPS 可能自动替换。

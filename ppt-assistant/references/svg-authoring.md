@@ -1,6 +1,6 @@
 # 约束 SVG 排版契约（svg-authoring）
 
-本文件定义深知可信PPT的页面设计语言：主 Agent 逐页手写的受限 SVG 方言，以及导出为原生 PPTX 的规则。方言在第三方开源（MIT）SVG 页面设计边界基础上改编；完整示例见 `references/upstream-example/`。
+本文件定义深知可信PPT的页面设计语言：主 Agent 逐页手写的受限 SVG 方言，以及导出为原生 PPTX 的规则。方言在第三方开源（MIT）SVG 页面设计边界基础上改编；页面写法示例见 `references/sample_search_result.md` 与 `references/sample_effect.html`。
 
 ## 一、核心契约
 
