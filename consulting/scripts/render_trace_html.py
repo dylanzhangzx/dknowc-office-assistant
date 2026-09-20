@@ -11,7 +11,7 @@ v1.3.0 架构（对齐公文写作 3.7.0 交互重构，数据口径保持咨询
 - 材料专库视图（全屏）：大搜索 + 热词（标题/正文高频词真实计算）+ 材料卡
   （统一问答接口无检索条件分组字段，tabs 退化为 全部/未引用 引用状态筛选）
 三个核验层次：报告级（核验报告单）／材料级（来源卡核验链标记）／引用级（角标一一绑定）。
-诚实原则：脚本真实计算的结果才打勾；政策现行效力等无法自动判定项归入"建议人工复核"。
+诚实原则：脚本真实计算的结果才打勾；无法自动判定的项不虚构展示（"现行效力"人工复核提示行已按产品要求移除，对齐公文写作 3.7.2）。
 布局为单文件静态 HTML；打印归档模式单栏全展开并附材料附录。
 咨询侧接口差异（如实退化，不虚构）：无文号/快照/检索分组字段——关键性行退化为
 "数据源·日期"、原文失效改用知识专库链接或如实标注（无存档快照通道）、无检索分组
@@ -1104,19 +1104,17 @@ def render_verify_panel(v: Dict[str, Any]) -> str:
     else:
         sc_html = '<div class="vi"><span class="s none">— 交付前检查 未记录</span><span class="d">本次未传入交付前检查结果</span></div>'
 
-    manual = ""
-    if v["policy_count"]:
-        manual = (f'<div class="vi"><span class="s man">◐ 现行效力</span>'
-                  f'<span class="d">{v["policy_count"]} 份政策文件建议按官方发布确认是否现行有效</span></div>')
+    # "现行效力"人工复核提示行已按产品要求移除（对齐公文写作 3.7.2，2026-09-19）：
+    # 政策是否现行有效无法自动判定，此提示对用户无操作价值；policy_count 仅保留在计算层不再展示。
 
     return f"""
     <div class="verify {state}">
       <div class="v-head"><span class="v-shield">{'✓' if ov['passed'] else '!'}</span>{esc(ov['label'])}{stamp}</div>
       {reasons_html}
       <div class="v-grid">
-        {tr_html}{bd_html}{fr_html}{sc_html}{manual}
+        {tr_html}{bd_html}{fr_html}{sc_html}
       </div>
-      <div class="v-note">核验方式：先通过可信问答从权威文件库召回材料，再把答案每处依据和原文逐条比对（都能点开原文回看），最后做了交付前五项检查。政策是否现行有效，以官方发布为准。{manual_checks_html}</div>
+      <div class="v-note">核验方式：先通过可信问答从权威文件库召回材料，再把答案每处依据和原文逐条比对（都能点开原文回看），最后做了交付前五项检查。{manual_checks_html}</div>
     </div>"""
 
 
@@ -1223,9 +1221,11 @@ def strip_leading_chain(text: str, chain: List[str]) -> str:
 
 
 def render_crumb(chain: List[str]) -> str:
-    """面包屑标题链：文章 › 章 › 节（标题链是模型生成的结构化位置，核验核心抓手）。"""
+    """面包屑标题链：文章 › 章 › 节（标题链是模型生成的结构化位置，核验核心抓手）。
+    段落本身无章节层级（链上只有文章名）时不显示——材料卡标题已是文章名，
+    单独一行重复文章名对定位无增量（对齐公文写作 3.7.2，徐总 2026-09-19 反馈）。"""
     parts = [esc(level) for level in chain if level]
-    if not parts:
+    if len(parts) < 2:
         return ""
     return '<span class="crumb">' + ' <i>›</i> '.join(parts) + "</span>"
 
@@ -2318,7 +2318,7 @@ def render_html(payload: Dict[str, Any], title: str, answer_override: str = "", 
     {render_section_cards(sections, sources)}
     </div>
     {render_archive_zone(extract_trace_archives(payload), len(sources))}
-    <div class="foot">深知可信咨询 · 可信核验报告 ｜ 内容由 AI 生成，仅供参考，政策现行效力以官方发布为准</div>
+    <div class="foot">深知可信咨询 · 可信核验报告 ｜ 内容由 AI 生成，仅供参考</div>
   </main>
 
   {render_library_view(sources, hot_terms)}

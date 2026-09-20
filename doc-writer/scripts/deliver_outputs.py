@@ -8,10 +8,13 @@
 探测优先级（宿主工作区）：
   1. --dest 显式指定
   2. 环境变量（WORKBUDDY_WORKSPACE / AGENT_WORKSPACE / WORKSPACE 等）
-  3. WorkBuddy 时间戳工作区：~/WorkBuddy/ 下目录名形如 2026-08-29-16-28-53
-     的最新一个，产物复制到其 outputs/ 子目录
-  4. 当前目录（仅当当前目录不在 skill 目录树内）
-  5. 都探测不到：不复制，输出 need_dest=true，要求用 --dest 指定后重跑
+  3. 当前目录所在的 WorkBuddy 时间戳工作区（进程在哪个工作区运行就交付到哪，
+     多会话并发时最可靠）
+  4. WorkBuddy 时间戳工作区：~/WorkBuddy/ 下目录名形如 2026-08-29-16-28-53
+     的最新一个，产物复制到其 outputs/ 子目录；最新两个工作区时间戳间隔
+     小于 10 分钟（并发会话）时视为歧义，不自动复制，要求 --dest 指定
+  5. 当前目录（仅当当前目录不在 skill 目录树内）
+  6. 都探测不到：不复制，输出 need_dest=true，要求用 --dest 指定后重跑
 
 注意：宿主 agent 执行 skill 脚本时当前目录常在 skill 安装目录内，因此
 不能用"当前目录是否等于 skill 目录"判断宿主环境，必须按上述顺序探测。
@@ -54,23 +57,47 @@ WORKSPACE_ENV_VARS = (
 # WorkBuddy 任务工作区目录名：YYYY-MM-DD-HH-MM-SS
 WORKBUDDY_DIR_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}$")
 
+# 并发歧义判定阈值：最新两个工作区时间戳间隔小于该值视为多会话并发
+AMBIGUOUS_WINDOW_SECONDS = 10 * 60
 
-def detect_workbuddy_workspace() -> Path | None:
-    """返回 ~/WorkBuddy/ 下最新的时间戳工作区目录，找不到返回 None。
 
-    目录名形如 2026-08-29-16-28-53，字典序即时间序，按目录名取最大最可靠
-    （新工作区刚创建、尚无文件写入时 mtime 不可靠）。
+def workbuddy_workspaces() -> list[Path]:
+    """返回 ~/WorkBuddy/ 下全部时间戳工作区，按目录名从新到旧排序。
+
+    目录名形如 2026-08-29-16-28-53，字典序即时间序（新工作区刚创建、
+    尚无文件写入时 mtime 不可靠，按目录名排序最可靠）。
     """
     root = Path.home() / "WorkBuddy"
     if not root.is_dir():
-        return None
+        return []
     candidates = [
         d for d in root.iterdir()
         if d.is_dir() and WORKBUDDY_DIR_PATTERN.match(d.name)
     ]
-    if not candidates:
-        return None
-    return max(candidates, key=lambda d: d.name)
+    return sorted(candidates, key=lambda d: d.name, reverse=True)
+
+
+def cwd_workbuddy_workspace() -> Path | None:
+    """当前目录所在的 WorkBuddy 时间戳工作区；不在任何工作区内返回 None。
+
+    多会话并发时"最新时间戳工作区"可能是别的会话，而进程当前目录是
+    宿主为本任务设定的工作位置，优先以其为准。
+    """
+    root = (Path.home() / "WorkBuddy").resolve()
+    cwd = Path.cwd().resolve()
+    for parent in (cwd, *cwd.parents):
+        if parent.parent == root and WORKBUDDY_DIR_PATTERN.match(parent.name):
+            return parent
+    return None
+
+
+def workspace_timestamp(name: str) -> float:
+    """把工作区目录名解析为时间戳，失败返回 0。"""
+    from datetime import datetime
+    try:
+        return datetime.strptime(name, "%Y-%m-%d-%H-%M-%S").timestamp()
+    except ValueError:
+        return 0.0
 
 
 def in_skill_tree(path: Path) -> bool:
@@ -78,34 +105,46 @@ def in_skill_tree(path: Path) -> bool:
     return path == SKILL_ROOT or SKILL_ROOT in path.parents
 
 
-def detect_dest(explicit_dest: str | None) -> tuple[Path | None, bool, str, bool]:
+def detect_dest(explicit_dest: str | None) -> tuple[Path | None, bool, str, bool, list[str]]:
     """探测交付目标目录。
 
-    返回（目标目录或 None, 是否宿主环境, 探测来源说明, 是否需要用户补 --dest）。
+    返回（目标目录或 None, 是否宿主环境, 探测来源说明, 是否需要用户补 --dest, 候选工作区名单）。
     """
     if explicit_dest:
         dest = Path(explicit_dest).expanduser().resolve()
-        return dest, True, "explicit", False
+        return dest, True, "explicit", False, []
 
     for name in WORKSPACE_ENV_VARS:
         value = os.environ.get(name, "").strip()
         if value:
             dest = Path(value).expanduser().resolve()
             if dest.is_dir():
-                return dest, True, f"env:{name}", False
+                return dest, True, f"env:{name}", False, []
 
-    workbuddy = detect_workbuddy_workspace()
-    if workbuddy is not None:
-        return workbuddy / "outputs", True, f"workbuddy:{workbuddy.name}", False
+    # 当前目录就在某个 WorkBuddy 工作区内：进程在哪运行就交付到哪，并发最可靠
+    cwd_ws = cwd_workbuddy_workspace()
+    if cwd_ws is not None:
+        return cwd_ws / "outputs", True, f"workbuddy-cwd:{cwd_ws.name}", False, []
+
+    workspaces = workbuddy_workspaces()
+    if workspaces:
+        newest = workspaces[0]
+        # 歧义保护：最新两个工作区时间戳间隔很近说明有并发会话，"最新"未必是
+        # 本任务的——宁可不复制也不串会话，列出候选要求 --dest 指定
+        if len(workspaces) > 1:
+            gap = workspace_timestamp(newest.name) - workspace_timestamp(workspaces[1].name)
+            if 0 < gap < AMBIGUOUS_WINDOW_SECONDS:
+                return None, False, "ambiguous", True, [d.name for d in workspaces[:5]]
+        return newest / "outputs", True, f"workbuddy:{newest.name}", False, []
 
     cwd = Path.cwd().resolve()
     if not in_skill_tree(cwd):
         # 当前目录在 skill 目录树之外，视为宿主工作区；已有 outputs/ 子目录时对齐
         dest = cwd / "outputs" if (cwd / "outputs").is_dir() else cwd
-        return dest, True, "cwd", False
+        return dest, True, "cwd", False, []
 
     # 当前目录在 skill 目录树内且未探测到宿主工作区：宁可不复制，也不污染 skill 目录
-    return None, False, "unknown", True
+    return None, False, "unknown", True, []
 
 
 def collect_files(args_files: list[str]) -> list[Path]:
@@ -135,11 +174,15 @@ def main() -> int:
     parser.add_argument("--dest", help="宿主工作区目录（探测失败或需要明确指定时使用）")
     args = parser.parse_args()
 
-    dest, host_env, dest_source, need_dest = detect_dest(args.dest)
+    dest, host_env, dest_source, need_dest, candidates = detect_dest(args.dest)
     files = collect_files(args.files)
 
     results = []
-    if need_dest:
+    if need_dest and dest_source == "ambiguous":
+        cand_list = "、".join(candidates)
+        note = (f"检测到多个时间戳相近的 WorkBuddy 工作区（{cand_list}），无法确定哪个是当前任务的，"
+                "已停止自动复制以防产物串到其他会话。请用 --dest <当前任务的工作区目录> 重新运行本脚本。")
+    elif need_dest:
         note = ("未能自动确定宿主工作区（当前目录在 skill 目录内，且未找到宿主工作区标记）。"
                 "请用 --dest <宿主工作区目录> 重新运行本脚本；在此之前不要向用户交付 skill 内部路径。")
     elif not files:
