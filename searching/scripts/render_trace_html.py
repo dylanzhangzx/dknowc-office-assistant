@@ -1390,8 +1390,13 @@ def render_source_card(source: Dict[str, str], for_print: bool = False) -> str:
         vk = f'<span class="sc-vk warn">◐ {reason}</span>'
         note_html = ""
     links = render_source_links(source.get("url"), source.get("policy_url", ""), source.get("snapshot", ""), source.get("link_dead", False))
-    # 关键性行：有文号（接口 policyFiles 匹配）时"文号 · 数据源 · 日期"，否则"数据源 · 日期"
-    meta_parts = [v for v in [source.get("doc_number"), source.get("agency"), source.get("date"), source.get("area")]
+    # 关键性行：有文号（接口 policyFiles 匹配）时"文号 · 数据源 · 日期"，否则"数据源 · 日期"。
+    # 文号必须是标准格式——政府公文"〔年份〕序号"（杭政函〔2022〕81号）或公告类"XXXX年第X号"
+    # （财政部税务总局公告2026年第10号，搜索场景常见，较公文版正则扩展）；描述性文字
+    # （"XX印发"类自造描述）不显示，当无文号处理（对齐公文写作 3.7.3 实测补强）。
+    _dn = source.get("doc_number") or ""
+    _dn = _dn if re.search(r"(〔\d{4}〕\s*\d+\s*号)|(\d{4}\s*年.{0,20}?第\s*\d+\s*号)", _dn) else ""
+    meta_parts = [v for v in [_dn, source.get("agency"), source.get("date"), source.get("area")]
                   if v and v != "未知来源"]
     meta = " | ".join(meta_parts)
     # 高可信徽标：仅"发布日期可信度=高"（模型治理入库、标题模型精抽）的材料；"较高"（门户抓取）不标。

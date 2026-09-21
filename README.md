@@ -1,6 +1,6 @@
 # 深知晓办公助手（skills.sh 版）
 
-深知晓办公助手由北京彩智科技有限公司旗下“深知可信智能”提供，是统一覆盖**公文写作、可信咨询、可信检索、PPT 生成**四大类办公场景的综合型 Agent Skill，并采用可扩展架构，未来可持续加入更多能力。本 v1.3.1 为四模块同步更新版本（检索并行化 + 核验报告自检白名单/现行效力行移除 + WorkBuddy 并发交付修正），四个能力模块分别取自对应独立 Skill 的最新发布包。
+深知晓办公助手由北京彩智科技有限公司旗下“深知可信智能”提供，是统一覆盖**公文写作、可信咨询、可信检索、PPT 生成**四大类办公场景的综合型 Agent Skill，并采用可扩展架构，未来可持续加入更多能力。本 v1.3.2 核心新增 **MCP「深知可信工作台」一等通道**（已连接时检索主链走 MCP 免 API Key，mcp_convert.py 转换产物与 REST 同构），四个能力模块分别取自对应独立 Skill 的最新发布包。
 
 ## 架构
 
@@ -10,10 +10,10 @@
 dknowc-office-assistant/
 ├── SKILL.md              # 主入口：能力矩阵 + 任务路由 + 综合规则
 ├── common/               # 统一公共层（初始化 / 注册取 Key / 发布检查）
-├── doc-writer/           # 能力一：公文写作（v3.7.3）
+├── doc-writer/           # 能力一：公文写作（v3.7.3，含 MCP 增量）
 ├── consulting/           # 能力二：可信咨询（v1.3.1）
-├── searching/            # 能力三：可信检索（v1.3.2）
-└── ppt-assistant/        # 能力四：PPT 生成（v1.3.1，含 ppt-master MIT 组件）
+├── searching/            # 能力三：可信检索（v1.4.1）
+└── ppt-assistant/        # 能力四：PPT 生成（v1.3.2，含 ppt-master MIT 组件）
 ```
 
 - **公共能力层（common/）**：`initialize.py`（多层门禁：基础依赖 / 检索凭证 / Word 排版 / PPT 编译）、`register_key.mjs`（统一 MaaS 注册取 Key，不传 type）。四个能力模块共用一套初始化与注册；发布检查在项目级 tools/ 维护。
@@ -24,10 +24,10 @@ dknowc-office-assistant/
 
 | 能力 | 模块 | 来源版本 | 主要交付物 |
 | --- | --- | --- | --- |
-| 公文写作 | `doc-writer/` | 深知公文写作 v3.7.3 | Word（可选红头）+ 可信核验报告 |
+| 公文写作 | `doc-writer/` | 深知公文写作 v3.7.3（同号增补 MCP） | Word（可选红头）+ 可信核验报告 |
 | 可信咨询 | `consulting/` | 深知可信咨询 v1.3.1 | 带角标答案 + 可信核验报告 |
-| 可信检索 | `searching/` | 深知可信搜索 v1.3.2 | 直接答案 + 可信核验报告 + 干净 Markdown |
-| PPT 生成 | `ppt-assistant/` | 深知可信PPT v1.3.1 | 原生可编辑 .pptx + 双版可信核验报告 |
+| 可信检索 | `searching/` | 深知可信搜索 v1.4.1 | 直接答案 + 可信核验报告 + 干净 Markdown |
+| PPT 生成 | `ppt-assistant/` | 深知可信PPT v1.3.2 | 原生可编辑 .pptx + 双版可信核验报告 |
 
 - **公文写作**：支持通知、请示、报告、函、会议纪要、总结、方案、讲话稿、调研报告等文种的起草、改写、润色、审查；范文大纲、深知检索、自由搜索（文风体例参考，全网非官方材料仅学写法、不进正文事实层与溯源报告）、GB/T 9704 排版、红头生成、本地素材库与写作偏好。
 - **可信咨询**：政策法规、政务办事、税务社保、企业补贴、资质证照等问答，统一问答接口输出带权威来源角标的答案。
@@ -62,4 +62,4 @@ python3 common/initialize.py
 
 ## API Key 配置
 
-统一通过 `DKNOWC_API_KEY` 注入（优先进程环境变量，缺失时从 `~/.zshrc` 标记块兜底解析，注册后无需重启宿主），四个能力模块共用。未配置时用 `common/register_key.mjs` 手机号验证码两步注册/查回（注册请求不传 `type`，实测接口可选且 Key 权限完整；各分支输出 `user_message` 固定话术须原样转述；**注册成功自动把 Key 写入 `~/.zshrc` 标记块**，`--no-zshrc` 可跳过）；MaaS 管理平台（登录页）：`https://platform.dknowc.cn/auth/#/login`。
+统一通过 `DKNOWC_API_KEY` 注入（优先进程环境变量，缺失时从 `~/.zshrc` 标记块兜底解析，注册后无需重启宿主），四个能力模块共用。未配置时用 `common/register_key.mjs` 手机号验证码两步注册/查回（注册请求不传 `type`，实测接口可选且 Key 权限完整；各分支输出 `user_message` 固定话术须原样转述；**注册成功自动把 Key 写入 `~/.zshrc` 标记块**，`--no-zshrc` 可跳过）；MaaS 管理平台（登录页）：`https://platform.dknowc.cn/auth/#/login`。**已连接 MCP「深知可信工作台」时检索主链走 MCP 免 Key 通道**（见 `SKILL.md`「MCP 一等通道」），Key 仅供深度搜索等脚本通道能力使用。

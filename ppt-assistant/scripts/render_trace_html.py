@@ -320,8 +320,11 @@ def source_from_article(item: Dict[str, Any], index: int, segment: Optional[Dict
     first_chain = segments[0]["chain"][1:] if segments else []
     source["doc_section"] = " › ".join(first_chain)
     source["chain_full"] = " › ".join(segments[0]["chain"]) if segments else ""
-    # 发文字号（接口字段或合并 JSON 的 文号/doc_number；无文号按数据源名显示）
-    source["doc_number"] = first_str(item.get("文号"), item.get("发文字号"), item.get("doc_number"))
+    # 发文字号：必须是标准格式（〔年份〕序号号）；描述性文字（"XX印发"类自造
+    # 描述）不显示、当无文号处理（对齐公文写作 3.7.3，实测模型把文号写成
+    # "中办、国办 2026 年印发"类描述导致关键性行失真）。
+    _dn = first_str(item.get("文号"), item.get("发文字号"), item.get("doc_number"))
+    source["doc_number"] = _dn if re.search(r"〔\d{4}〕\s*\d+\s*号", _dn) else ""
     # 所属搜索条件（多路检索分组）与引用状态（未引用=接口召回但正文未采用）
     source["search_key"] = first_str(item.get("搜索条件"), item.get("search_key"))
     source["used"] = item.get("已引用", item.get("used", True))
@@ -504,8 +507,10 @@ def classify_check_value(raw: Any) -> Tuple[str, str]:
     """把自检项的值解析为（状态, 核验说明）。
 
     兼容多种写法：`pass` / `true` / `通过` / `通过：说明文字` / `✓` 等；
-    值后面的说明文字保留下来供核验单展示。无法识别的状态按未通过处理，
-    并保留原文，不假装通过。
+    值后面的说明文字保留下来供核验单展示。红项（fail）只给显式声明的
+    "未通过"；无法识别的描述性文本按"未记录"（none）处理不判红——
+    自检书写格式走样不应被放大成核验红项（对齐公文写作 3.7.3，实测
+    模型写入"备注"等额外键导致交付前检查误判红）。
     """
     text = str(raw or "").strip()
     lowered = text.lower()
@@ -515,7 +520,7 @@ def classify_check_value(raw: Any) -> Tuple[str, str]:
     for prefix in ("已通过", "通过", "合格", "pass", "ok", "true", "是", "✓", "yes"):
         if lowered.startswith(prefix):
             return "pass", text[len(prefix):].lstrip("：:，,、 ").strip()
-    return "fail", text
+    return "none", text
 
 
 def normalize_self_check(raw: Any) -> Optional[Dict[str, Tuple[str, str]]]:
@@ -523,8 +528,13 @@ def normalize_self_check(raw: Any) -> Optional[Dict[str, Tuple[str, str]]]:
         return None
     items: Dict[str, Tuple[str, str]] = {}
     for key, value in raw.items():
+        # 只认五项标准自检键（英文/中文变体映射）；白名单外的键（备注、待核验、
+        # 下一步补充等描述性额外键）不计入核验单——分母不被撑大，多余键不构成
+        # "交付前检查"定义的核验项。
+        label = SELF_CHECK_LABELS.get(key) or SELF_CHECK_LABELS.get(str(key))
+        if label is None:
+            continue
         status, note = classify_check_value(value)
-        label = SELF_CHECK_LABELS.get(key, SELF_CHECK_LABELS.get(str(key), str(key)))
         items[label] = (status, note)
     return items or None
 
@@ -577,8 +587,11 @@ def compute_verification(answer: str, sources: List[Dict[str, str]], payload: Di
     self_check = None
     if self_items:
         passed = sum(1 for status, _ in self_items.values() if status == "pass")
+        fails = sum(1 for status, _ in self_items.values() if status == "fail")
+        # 状态由显式 fail 决定；none（描述性值/未记录）不判红也不拖垮通过
+        status = "fail" if fails else ("pass" if passed else "missing")
         self_check = {"items": self_items, "passed": passed, "total": len(self_items),
-                      "status": "pass" if passed == len(self_items) else "fail"}
+                      "status": status}
     else:
         self_check = {"items": {}, "passed": 0, "total": len(SELF_CHECK_ITEMS), "status": "missing"}
 
@@ -1047,12 +1060,14 @@ def render_verify_panel(v: Dict[str, Any], stage: str = "final") -> str:
         notes = "；".join(note for _, note in sc["items"].values() if note)
         title_attr = f' title="{esc(notes)}"' if notes else ""
         item_names = "、".join(sc["items"].keys()) if sc["items"] else "、".join(label for _, label in SELF_CHECK_ITEMS)
-        sc_html = (f'<div class="vi"><span class="s ok"{title_attr}>✓ 交付前检查 {sc["passed"]}/{sc["total"]}</span>'
+        none_count = sum(1 for status, _ in sc["items"].values() if status == "none")
+        none_note = f"（{none_count} 项未记录）" if none_count else ""
+        sc_html = (f'<div class="vi"><span class="s ok"{title_attr}>✓ 交付前检查 {sc["passed"]}/{sc["total"]}{esc(none_note)}</span>'
                    f'<span class="d">{esc(item_names)}{esc(" · 悬停查看说明" if notes else "")}</span></div>')
     elif sc["status"] == "fail":
         failed_parts = []
         for label, (status, note) in sc["items"].items():
-            if status != "pass":
+            if status == "fail":
                 suffix = f"（{note[:40]}…）" if len(note) > 40 else (f"（{note}）" if note else "")
                 failed_parts.append(label + suffix)
         sc_html = (f'<div class="vi"><span class="s fail">✗ 交付前检查 {sc["passed"]}/{sc["total"]}</span>'

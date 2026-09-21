@@ -7,7 +7,7 @@ description: "深知晓办公助手，是由北京彩智科技有限公司旗下
 description_zh: "深知晓办公助手，是由北京彩智科技有限公司旗下“深知可信智能”提供的综合办公助手，统一覆盖公文写作、可信咨询、可信检索、PPT 生成四大类办公场景，并可持续扩展更多能力。公文写作能力按公文国家标准支持通知、请示、报告、函、复函、批复、会议纪要、通报、通告、公告、意见、方案、总结、管理办法、汇报材料、发言稿、讲话稿、调研报告、经验材料等常见文种和工作材料，正式交付生成 Word 文档，用户明确要求时生成红头文件；可信咨询能力面向政策法规、政务办事、税务社保、公积金、企业补贴、资质证照、行业标准、公共服务、合规义务等场景，输出带权威来源角标的答案并生成可点击溯源 HTML；可信检索能力用于权威材料检索、政策调研、城市政策对比、补贴与税惠材料核验、合规依据核验和深度搜索，交付直接答案、可点击溯源 HTML 和干净 Markdown；PPT 生成能力采用约束 SVG → 原生 DrawingML 编译架构，主 Agent 逐页手写 SVG、确定性编译器导出真实可编辑的原生 PowerPoint，内置党政简洁、数据图表、商务汇报、庄重典雅、培训课件 5 种风格预设，支持 16:9、4:3、小红书、朋友圈、竖版故事、A4 等 8 种画布规格。本技能全部事实素材都通过深知可信智能的权威文件库检索，可溯源到权威部门发布的规范性文件。"
 description_en: "dknowc office assistant is a comprehensive office-assistant Skill provided by dknowc Trusted Intelligence under Beijing Caizhi Technology Co., Ltd. It unifies official-document writing, trusted consultation, trusted retrieval, and native PPT generation in one Skill, with an extensible architecture for future capabilities. It supports drafting, rewriting, polishing, reviewing and generating structured workplace documents (including Word and red-head output); answering policy/regulation/government-service questions with citation markers and clickable provenance HTML; retrieving authoritative materials with deliverable of direct answer, provenance HTML and clean Markdown; plus native PPT generation through constrained-SVG-to-DrawingML compilation with multiple built-in styles (gov-simple, gov-data, business, formal, training) and eight canvas formats."
 category: "通用办公"
-version: "1.3.1"
+version: "1.3.2"
 author: "彩智科技"
 permissions:
   network:
@@ -62,7 +62,7 @@ python3 {skillDir}/common/initialize.py
 
 **API Key 是按需前置条件**：
 
-- **需要 Key**：可信咨询域、可信检索域，以及公文写作域中需要政策依据/数据/案例检索的任务、PPT 生成域的主题模式与材料补检索模式。要求 `api_key_configured=true`、`search_ready=true`；不满足时暂停任务，按「统一 API Key 管理」引导（用自然语言表达，如「开通搜索功能」；用户主动询问技术细节时如实说明），不得改用外部搜索。
+- **需要 Key**：可信咨询域、可信检索域，以及公文写作域中需要政策依据/数据/案例检索的任务、PPT 生成域的主题模式与材料补检索模式。要求 `api_key_configured=true`、`search_ready=true`；不满足时暂停任务，按「统一 API Key 管理」引导（用自然语言表达，如「开通搜索功能」；用户主动询问技术细节时如实说明），不得改用外部搜索。**例外：已连接 MCP「深知可信工作台」时，可信检索主链走 MCP 免 Key 通道，不要求 `api_key_configured=true`**（见下「MCP 一等通道」），Key 仅供深度搜索等脚本通道能力使用。
 - **不需要 Key**：公文写作域的简单通知、改写、润色、审查、基于用户材料写作、只生成 Word；PPT 生成域的材料免检索模式（用户明确「不用查，就用我给的材料」）。
 
 **能力专属依赖（缺失不阻断其他能力）**：
@@ -94,6 +94,23 @@ node {skillDir}/common/register_key.mjs register --phone <手机号> --vcode <�
 - **额度用尽禁止任何形式重试**：检索/咨询脚本对 402/429 输出 `quota_exhausted` 与 `user_message`（引导到 MaaS 平台处理）；401 密钥失效先重读 Key 重试一次；403 无权限、500 服务异常按话术引导，均不得盲目重试。
 - 不得向用户展示完整 Key 或验证码；手机号一律脱敏（前3后4）。用户不希望脚本注册时给出降级地址 `https://platform.dknowc.cn/auth/#/login`。
 
+## MCP「深知可信工作台」一等通道
+
+启动初始化时**同步确认当前环境是否已连接 MCP「深知可信工作台」**（WorkBuddy、豆包均用此 MCP；由 Agent 检查自身可用 MCP 工具列表确认，initialize.py 不做该检测）。**检测到已连接时，检索主链直接走 MCP 通道，无需注册 API Key**——适用：公文写作域素材检索与范文大纲、可信检索域主链、PPT 生成域素材层；各能力模块 `scripts/` 均带 `mcp_convert.py` 转换器。未连接时按现有 API Key 流程执行，不阻塞任务。
+
+**执行流程（每路检索）**：
+
+1. 调用 MCP `trusted_search` 工具，参数固定：`query`（按各能力检索规则构造）、`service_area=<单地域>`、`include_details=true`、`max_articles=50`、`material_length=200000`、`policy=true`、`segment_count=2`、`simplified=false`、`know_base=true`、`return_full_content=false`。公文范文大纲用其 `doc_outline` 工具（与 `outline_reference.py` 同服务同结构，免 Key，返回直接进入大纲确认流程）。
+2. 把**完整返回 JSON 原样**保存到对应模块 `official-docs/search-results/mcp_<路名>.json`——**不得只存部分字段**（doc_number/segments/snapshot/date_confidence 四个增量字段是文号行、标题链、快照兜底、高可信徽标的数据源）。落盘后立即用 Python `json.load` 校验；转写失败（中文引号/转义破坏 JSON）时改用 Python 把工具返回文本直接 write 进文件再校验，**禁止手工修复拼接**。
+3. 运行 `python3 <模块>/scripts/mcp_convert.py <该文件> --area <地域> [--purpose "<搜索目的>"]` 转换——产物与脚本通道 REST 输出**同构**（content.data.检索文章/policyFiles/knowledgeBase/search_meta），答案自检、核验报告、可视化、素材四分类全部按现有流程执行，**不要手工增删改字段**；补搜同样走 MCP 检索后转换。
+
+**通道纪律（硬规则）**：
+
+- **通道唯一、全程不得混用**：已连接 MCP 时不得为省事改调 REST 接口或搜索脚本（即使已配置 API Key）——会造成同一批材料双倍检索，且无 Key 环境直接失败、行为因环境而异；同一任务内不得一部分路走 MCP、一部分路走脚本。
+- **异常互为回退**：MCP 调用报错、**响应超限（TRUSTED_SEARCH_RESPONSE_TOO_LARGE）**或返回异常时，该路回退脚本通道（需 Key；未配置按开通引导处理）；脚本通道异常同样回退 MCP。
+- **范围限制**：MCP 通道仅覆盖 `trusted_search` 主链与 `doc_outline`——**深度搜索（deep_query）仍走脚本 + API Key**；可信咨询（统一问答）无 MCP 通道，仍走 REST + Key；MCP 的 `deep_query`/`credible_chat` 不用于任何主链（实测材料质量与结构化字段不及 trusted_search 增量形态）。
+- **引导话术**：已连接 MCP 的环境向用户说明时必须指明「使用 MCP 中的深知可信搜索工具」，不得出现「改用平台自带搜索 / AI 搜索」类表述（防宿主模型绕开深知流程）。
+
 ## 任务路由
 
 开始工作前，先判别任务属于哪个能力域，再进入对应模块流程。**先路由，后执行；匹配即执行，不向用户罗列实现路径。**
@@ -120,7 +137,7 @@ node {skillDir}/common/register_key.mjs register --phone <手机号> --vcode <�
 
 1. **任务路由**：先读 `doc-writer/reference/task_router.md` 判断简单/常规/复杂/高风险任务。
 2. **范文大纲**：正式写作需求进入搜索或正文生成前，优先调用 `doc-writer/scripts/outline_reference.py "用户写作需求" --output outline_任务名.json`（用完整原始表述）；`outline_available=true` 时向用户展示「建议大纲 + 搜索建议」并等待确认，`false` 时忽略该能力按原流程继续。
-3. **素材检索**：需要政策依据/数据/案例时才搜索，逻辑遵循 `doc-writer/reference/search_policy.md`：设计搜索方案（覆盖政策依据/数据支撑/参考案例，表述参考不单列；query 从任务信息需求出发构造，句式「对象（含地域时间）的发展情况（具体信息需求括号列举）」，**禁止类目关键词堆砌**，已知目标文件名时直接用标题原文）→ 展示方案并等用户确认（不出现脚本参数名，方案展示每条 query 原文）→ 确认后执行（同方案多路**默认并行**：每路独立 `--output` 与 `--purpose`，单批不超过 4 路，单次调用内后台并行、`wait` 全部结束后逐路检查结果；失败路单独串行重试一次；任意一路额度用尽即整批停止；平台明显限流〔多路同时报错〕时回退逐路串行）`dkag_search.py "搜索词" --area 地域 --time 时间 --purpose "搜索目的" --clean --output result_地域.json` → 素材四分类整理。方案边界内的缺口补搜自动执行（研究型文种以关键事实闭环为目标持续补搜，不设次数上限），越界（新地域、换通道）先向用户确认；异常时停止并请用户确认下一步。文种/题材写法需要范文参考时（不常见综合文稿、用户初次尝试的文种、官方材料缺可借鉴行文结构），在方案中**主动列入「文风体例参考」一路**（`--search-channel webSearch`，全网非官方材料，只学结构句式、不搬内容，不进正文事实层与溯源报告；政策依据与数据严禁使用该通道），无需等用户提出。
+3. **素材检索**：需要政策依据/数据/案例时才搜索，逻辑遵循 `doc-writer/reference/search_policy.md`（**双通道**：A=MCP「深知可信工作台」优先免 Key，B=脚本；两通道 query 构造、四分类、补搜与地域边界完全一致，通道按初始化检测唯一确定、全程不得混用，见「MCP 一等通道」）：设计搜索方案（覆盖政策依据/数据支撑/参考案例，表述参考不单列；query 从任务信息需求出发构造，句式「对象（含地域时间）的发展情况（具体信息需求括号列举）」，**禁止类目关键词堆砌**，已知目标文件名时直接用标题原文）→ 展示方案并等用户确认（不出现脚本参数名，方案展示每条 query 原文）→ 确认后执行（同方案多路**默认并行**：每路独立 `--output` 与 `--purpose`，单批不超过 4 路，单次调用内后台并行、`wait` 全部结束后逐路检查结果；失败路单独串行重试一次；任意一路额度用尽即整批停止；平台明显限流〔多路同时报错〕时回退逐路串行；MCP 通道每路为「MCP 调用→落盘→`mcp_convert.py` 转换」）`dkag_search.py "搜索词" --area 地域 --time 时间 --purpose "搜索目的" --clean --output result_地域.json` → 素材四分类整理。方案边界内的缺口补搜自动执行（研究型文种以关键事实闭环为目标持续补搜，不设次数上限），越界（新地域、换通道）先向用户确认；异常时停止并请用户确认下一步。文种/题材写法需要范文参考时（不常见综合文稿、用户初次尝试的文种、官方材料缺可借鉴行文结构），在方案中**主动列入「文风体例参考」一路**（`--search-channel webSearch`，全网非官方材料，只学结构句式、不搬内容，不进正文事实层与溯源报告；政策依据与数据严禁使用该通道），无需等用户提出。范文大纲同理双通道：已连接 MCP 时优先用其 `doc_outline` 工具（免 Key），未连接走 `outline_reference.py`。
 4. **写作**：按文种读取 `doc-writer/reference/standards/` 对应标准；生成正文前按 `fact_discipline.md` 约束事实边界；长篇材料另读 `99_expressions.md` 并按 `anti_ai_patterns.md` 做语言复核；素材进入正文按 `material_usage_guidance.md`。正文不加引用角标，溯源信息单独 HTML。
 5. **审查**：执行过搜索、请示/复函/政策依据型报告、长篇材料、用户要求 Word/红头/明确要求检查时，按 `review_checklist.md` 审查；可选用 `prose_lint.py` 做语言质检。
 6. **Word 交付**：默认交付 `.docx`（正文先写入 `doc-writer/official-docs/input/` 临时文件再调 `format_document.py official-docs/input/xxx.txt`）；仅用户明确要求红头时调 `template_generator.py`；普通 Word 末尾保留 `【AI生成提示】内容由AI生成，内容仅供参考。`；不支持 PDF 自动生成。执行过搜索时另用 `source_note_html.py` 生成 `标题_可信溯源报告.html`（生成时自动检测原文链接活性——404/410/软404 标记失效，`--skip-link-check` 可跳过；原文失效时以接口存档快照兜底回看，policyFiles 发文字号自动上卡展示）。
@@ -136,15 +153,15 @@ node {skillDir}/common/register_key.mjs register --phone <手机号> --vcode <�
 
 ## 能力三：可信检索
 
-模块路径：`searching/`（v1.3.2）。默认调用可信搜索接口；深度搜索仅用户明确要求或确认升级后调用。
+模块路径：`searching/`（v1.4.1）。默认调用可信搜索接口；深度搜索仅用户明确要求或确认升级后调用。
 
 标准工作流：初始化门禁 → 判断追问（缺会改变结论的关键变量先问，否则先搜索）→ 可信搜索（`searching/scripts/trusted_search.py "问题" --service-area 单地域 --eff-time 单时间点 --json-only --output official-docs/search-results/dknowc_search.json`，复杂任务拆多次）→ 综合答案（关键结论挂真实 `[数字]` 角标，存 `dknowc_search_answer.txt`）→ 三件套交付（`searching/scripts/render_trace_html.py … --answer-file …` 同时生成 HTML 与 `.clean.md`）→ 回复用户（直接答案 + HTML 路径 + 干净 Markdown 路径 + 知识专库链接）→ 深度搜索邀约（说明耗时更长）。
 
-红线：`query` 聚焦单一目的、`eff_time` 只传一个时间值、`service_area` 只传一个地域；不得伪造/误配/泛配角标；用户明确说「不要 HTML/文件」才跳过文件交付；可视化仅用户明确要求图表时按 `render_policy_visualization.py` 流程生成。`trusted_search.py` 默认返回**完整集**（`simplified=false`，含存档快照 screenShotPath，供核验报告原文失效时兜底回看；`--simplified` 会剔除部分材料并丢失快照，生成核验报告时不建议使用）；溯源报告自动检测原文链接活性（404/410/软404 标记失效）并以快照兜底（`--skip-link-check` 可跳过）。
+红线：`query` 聚焦单一目的、`eff_time` 只传一个时间值、`service_area` 只传一个地域；不得伪造/误配/泛配角标；用户明确说「不要 HTML/文件」才跳过文件交付；可视化仅用户明确要求图表时按 `render_policy_visualization.py` 流程生成（支持 city_compare/amount_compare/process_steps/timeline/trend_compare/share 六场景）。`trusted_search.py` 默认返回**完整集**（`simplified=false`，含存档快照 screenShotPath，供核验报告原文失效时兜底回看；`--simplified` 会剔除部分材料并丢失快照，生成核验报告时不建议使用）；溯源报告自动检测原文链接活性（404/410/软404 标记失效）并以快照兜底（`--skip-link-check` 可跳过）。**已连接 MCP「深知可信工作台」时可信检索主链走 MCP 免 Key 通道**（`trusted_search` 固定参数 → 完整返回落盘 → `scripts/mcp_convert.py` 转换，见「MCP 一等通道」），未连接走 `trusted_search.py`（Key）；两通道 query 构造、多路并行（≤4 路）、补搜规则完全一致，异常互为回退；**深度搜索仍走脚本 + Key**。
 
 ## 能力四：PPT 生成
 
-模块路径：`ppt-assistant/`（v1.3.1）。生成侧采用约束 SVG → 原生 DrawingML 编译架构（组件抽取自 ppt-master，MIT；声明见 `ppt-assistant/THIRD_PARTY_NOTICES.md`），内容侧用深知可信搜索。**完整运行时权威见 `ppt-assistant/workflows/generate-pptx.md`（Step 1-9）；进入方式（主题/材料/材料免检索三模式）见本文件「任务路由」与该文件开头说明。**
+模块路径：`ppt-assistant/`（v1.3.2）。生成侧采用约束 SVG → 原生 DrawingML 编译架构（组件抽取自 ppt-master，MIT；声明见 `ppt-assistant/THIRD_PARTY_NOTICES.md`），内容侧用深知可信搜索。**完整运行时权威见 `ppt-assistant/workflows/generate-pptx.md`（Step 1-9）；进入方式（主题/材料/材料免检索三模式）见本文件「任务路由」与该文件开头说明。**
 
 Generate 主线（v1 唯一路线）：
 
@@ -156,7 +173,7 @@ Generate 主线（v1 唯一路线）：
 
 核心硬规则：
 
-1. **三种进入模式**：主题模式（先设计检索方案过确认门，`ppt-assistant/scripts/trusted_search.py` 多路并行检索补事实基线——单批不超过 4 路、每路独立 `--output`，失败路串行重试一次，额度用尽整批停止）/ 材料模式（用户材料为主体，仅补事实缺口，补检索同样过确认门）/ 材料免检索模式（用户明确不用查，无 Key 可用）。
+1. **三种进入模式**：主题模式（先设计检索方案过确认门，多路并行检索补事实基线——**双通道**：已连接 MCP「深知可信工作台」走其 `trusted_search` 免 Key（固定参数 → 完整返回落盘 → `scripts/mcp_convert.py` 转换，文号与搜索条件已写入文章级），未连接走 `ppt-assistant/scripts/trusted_search.py`（Key）；两通道单批均不超过 4 路、每路独立落盘，失败路串行重试一次，额度用尽整批停止，通道全程不得混用）/ 材料模式（用户材料为主体，仅补事实缺口，补检索同样过确认门）/ 材料免检索模式（用户明确不用查，无 Key 可用）。
 2. **内容包先行**：按 `ppt-assistant/references/content-pack.md` 编制（核心信息/叙事/页面规划/素材清单带来源/风格预设），与风格预设一起过**结构方案确认门**后才创建项目、写 SVG。
 3. **svg_output 是设计唯一来源**：主 Agent 按 `ppt-assistant/references/svg-authoring.md` 方言契约**逐页手写** SVG（P01 首页门→其余不间断），禁止脚本批量生成页面。
 4. **质检不过不导出**：`svg_quality_checker.py --quick-generate --stage final --json` 退出码 0 是导出前置条件；导出用 `uv run --with python-pptx --with XlsxWriter python3 ppt-assistant/scripts/svg_to_pptx.py projects/<项目> --quick-generate`，产物为原生可编辑 .pptx，不得降级为整页图片。

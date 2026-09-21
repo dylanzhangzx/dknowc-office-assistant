@@ -35,23 +35,34 @@
 
 ## 搜索工具边界
 
-本 Skill 的素材搜索必须使用深知搜索脚本：
+本 Skill 的素材搜索有两个等价通道，按初始化检测结果选择：
+
+**通道 A：MCP「深知可信工作台」**（检测到已连接时优先，免 API Key）——调用其 `trusted_search` 工具（参数 `include_details=true, max_articles=50, material_length=200000, policy=true, segment_count=2, service_area=<单地域>`），完整返回 JSON 保存到 `official-docs/search-results/mcp_<路名>.json`，再转换：
+
+```bash
+python3 scripts/mcp_convert.py official-docs/search-results/mcp_<路名>.json --area 地域 --purpose "搜索目的"
+```
+
+转换产物与通道 B 输出同构，后续流程（素材分类、研究资料、溯源报告）完全一致。MCP 调用报错、返回异常或超限时，回退通道 B。
+
+**通道 B：深知搜索脚本**（未连接 MCP 的环境）
 
 ```bash
 python3 scripts/dkag_search.py "搜索词" --area 地域 --clean --output result.json
 ```
 
-禁止默认使用以下工具或方式替代深知搜索：
+两通道共同约束：query 构造、素材四分类、补搜规则、地域边界完全一致；MCP 通道下同样执行缺口补搜（补搜仍走 `trusted_search`，转换后并入）。禁止默认使用以下工具或方式替代深知搜索：
 
 - Web Search
 - Web Fetch
 - 浏览器搜索
 - 公开官网抓取
 - 通用搜索引擎
+- MCP 的 `deep_query` / `credible_chat`（实测材料质量与结构化字段不及 `trusted_search` 增量形态，不用于写作主链）
 
 只有用户明确授权“改用 Web 搜索”“用公开官网检索”“不用深知搜索，网上查”等场景，才允许使用外部搜索。外部搜索结果必须单独标注为“公开网页补充材料”，不得写入【知识专库链接】，不得伪装为深知搜索素材。
 
-如果深知搜索异常、空结果或素材不足，必须先暂停并请用户选择下一步，不得自行切换到 Web Search/Web Fetch。
+如果深知搜索异常、空结果或素材不足，必须先暂停并请用户选择下一步，不得自行切换到 Web Search/Web Fetch（MCP 通道异常时回退脚本通道不算切换外部搜索）。
 
 ## 自由搜索（webSearch）使用边界
 

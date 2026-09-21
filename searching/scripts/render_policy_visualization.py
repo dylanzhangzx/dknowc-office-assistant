@@ -23,7 +23,7 @@ SKILL_ROOT = Path(__file__).resolve().parent.parent
 SEARCH_RESULTS_DIR = SKILL_ROOT / "official-docs" / "search-results"
 OUTPUT_DIR = SKILL_ROOT / "official-docs" / "output"
 
-SCENARIOS = {"city_compare", "amount_compare", "process_steps", "timeline"}
+SCENARIOS = {"city_compare", "amount_compare", "process_steps", "timeline", "trend_compare", "share"}
 
 
 def _is_within(path: Path, parent: Path) -> bool:
@@ -114,10 +114,12 @@ def load_data(path: Path) -> Dict[str, Any]:
             if isinstance(data.get("cities"), list) and not isinstance(data.get("items"), list):
                 data["items"] = data["cities"]
             has_any = any(isinstance(data.get(key), list) for key in ("items", "time", "steps", "materials"))
-            if has_any:
+            has_xy = any(isinstance(data.get(key), dict) for key in ("trend", "compare"))
+            has_share = isinstance(data.get("share"), list)
+            if has_any or has_xy or has_share:
                 data.setdefault("metadata", {})
                 return data
-        raise ValueError("JSON input must be a list, or contain items/cities/time/steps/materials.")
+        raise ValueError("JSON input must be a list, or contain items/cities/time/steps/materials/trend/compare/share.")
 
     if path.suffix.lower() == ".csv":
         with path.open("r", encoding="utf-8-sig", newline="") as f:
@@ -151,10 +153,16 @@ def _detect_unit(key: str) -> str:
 
 
 def detect_metrics(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """自动识别数值列，返回显式 metric schema 元组（auto=True）。"""
+    """自动识别数值列，返回显式 metric schema 元组（auto=True）。
+
+    指标位置两兼容：优先扫 item["metrics"] 子字典（schema 推荐位置，
+    与 metric_value 取值口径一致）；无子字典时扫 item 顶层（旧 CSV/旧 JSON 格式）。
+    """
     keys: List[str] = []
     for row in rows:
-        for key, value in row.items():
+        sub = row.get("metrics")
+        candidates = list(sub.items()) if isinstance(sub, dict) else list(row.items())
+        for key, value in candidates:
             if key in keys or key in SKIP_NUMERIC_KEYS or isinstance(value, (dict, list)):
                 continue
             if is_number_like(value):
@@ -290,6 +298,12 @@ def detect_scenario(data: Dict[str, Any], metadata: Dict[str, Any]) -> str:
         return "process_steps"
     if isinstance(data.get("materials"), list) and data["materials"] and not data.get("items"):
         return "process_steps"
+    # 带数值的时间序列（trend）与并列对比（compare）：画折线/分组柱状比事件时间线信息量大
+    if isinstance(data.get("trend"), dict) and data["trend"].get("series") or \
+       isinstance(data.get("compare"), dict) and data["compare"].get("series"):
+        return "trend_compare"
+    if isinstance(data.get("share"), list) and len(data["share"]) >= 2:
+        return "share"
     if isinstance(data.get("time"), list) and len(data["time"]) >= 2:
         return "timeline"
     if isinstance(data.get("items"), list) and data["items"]:
@@ -297,6 +311,58 @@ def detect_scenario(data: Dict[str, Any], metadata: Dict[str, Any]) -> str:
             return "city_compare"
         return "amount_compare"
     return "city_compare"
+
+
+def _normalize_xy_series(block: Any) -> Optional[Dict[str, Any]]:
+    """规范化 trend/compare 数据块：{x_labels:[...], series:[{name, values, unit, sources}]}。
+
+    兼容简写：x 与 labels/x_labels；系列 values 支持 [数字] 与 [{value:数字}]；
+    长度不齐的系列按最短截齐并记 warning（宁可少画不造假数据）。
+    """
+    if not isinstance(block, dict):
+        return None
+    xs = block.get("x_labels") or block.get("x") or block.get("labels") or []
+    xs = [str(x).strip() for x in xs if str(x).strip()]
+    raw_series = [s for s in (block.get("series") or []) if isinstance(s, dict)]
+    if not xs or not raw_series:
+        return None
+    series = []
+    for s in raw_series:
+        values = []
+        for v in (s.get("values") or []):
+            values.append(to_float(v.get("value") if isinstance(v, dict) else v, default=float("nan")))
+        series.append({
+            "name": str(s.get("name") or "").strip() or "系列",
+            "values": values,
+            "unit": str(s.get("unit") or "").strip(),
+            "sources": coerce_sources(s.get("sources")),
+        })
+    width = min([len(xs)] + [len(s["values"]) for s in series]) if series else 0
+    if width < 2:
+        return None
+    return {"x_labels": xs[:width], "series": [
+        {**s, "values": s["values"][:width]} for s in series
+    ]}
+
+
+def _normalize_share(block: Any) -> Optional[List[Dict[str, Any]]]:
+    """规范化占比数据：[{name, value, unit, sources}]，负值/非数剔除。"""
+    if not isinstance(block, list):
+        return None
+    rows = []
+    for r in block:
+        if not isinstance(r, dict):
+            continue
+        value = to_float(r.get("value"), default=float("nan"))
+        if value != value or value < 0:  # NaN 或负数
+            continue
+        rows.append({
+            "name": str(r.get("name") or "").strip() or "构成",
+            "value": value,
+            "unit": str(r.get("unit") or "").strip(),
+            "sources": coerce_sources(r.get("sources")),
+        })
+    return rows if len(rows) >= 2 else None
 
 
 def _parse_date_key(value: Any) -> str:
@@ -316,8 +382,9 @@ def build_report(data: Dict[str, Any], input_path: Path, metric_names: List[str]
     metadata.setdefault("source_note", input_path.name)
     raw_items = [x for x in data.get("items", []) if isinstance(x, dict)]
 
-    if not raw_items and not (data.get("steps") or data.get("materials") or data.get("time")):
-        raise ValueError("Input contains no usable data: provide items/time/steps/materials.")
+    if not raw_items and not (data.get("steps") or data.get("materials") or data.get("time")
+                              or data.get("trend") or data.get("compare") or data.get("share")):
+        raise ValueError("Input contains no usable data: provide items/time/steps/materials/trend/compare/share.")
 
     metric_schema, schema_warnings = build_metric_schema(data, raw_items)
     warnings: List[str] = list(schema_warnings)
@@ -386,6 +453,15 @@ def build_report(data: Dict[str, Any], input_path: Path, metric_names: List[str]
     for row in materials:
         row.setdefault("sources", coerce_sources(row.get("sources")))
 
+    # 趋势（多系列折线）与并列对比（分组柱状）：共用 xy-series 结构（1.4.0 新增）
+    trend = _normalize_xy_series(data.get("trend"))
+    compare = _normalize_xy_series(data.get("compare"))
+    share = _normalize_share(data.get("share"))
+    if isinstance(data.get("trend"), dict) and not trend:
+        warnings.append("trend 数据不完整（x 与 series.values 需 ≥2 个对齐数据点），已跳过趋势图。")
+    if isinstance(data.get("compare"), dict) and not compare:
+        warnings.append("compare 数据不完整（x 与 series.values 需 ≥2 个对齐数据点），已跳过对比图。")
+
     report = {
         "metadata": metadata,
         "scenario": final_scenario,
@@ -395,6 +471,9 @@ def build_report(data: Dict[str, Any], input_path: Path, metric_names: List[str]
         "time": time_rows,
         "steps": steps,
         "materials": materials,
+        "trend": trend,
+        "compare": compare,
+        "share": share,
         "sources_footer": aggregate_sources(data, items),
         "warnings": warnings,
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -468,6 +547,163 @@ def render_simple_bars(report: Dict[str, Any]) -> str:
             )
         parts.append(f'<article class="metric-block"><h3>{esc(m["label"])}<small>{esc(m["unit"])}</small></h3>{"".join(bars)}</article>')
     return "\n".join(parts)
+
+
+def _svg_num(value: float) -> str:
+    return f"{value:g}"
+
+
+def _xy_svg_frame(x_labels: List[str], values: List[float], width: int = 720, height: int = 300) -> Dict[str, Any]:
+    """折线/柱状共用的坐标框架：返回画布与几何（原点、网格、x 均分点）。
+
+    初始静态可读原则：Y 轴刻度与网格线直接画在 SVG 里，数值标签全部静态标注，
+    不依赖悬停才可读（对齐 doubao-visualization 规则）。
+    """
+    pad_l, pad_r, pad_t, pad_b = 52, 18, 30, 40
+    plot_w = width - pad_l - pad_r
+    plot_h = height - pad_t - pad_b
+    vmax = max(values + [1])
+    vmin = min(values + [0])
+    if vmin > 0:
+        vmin = 0
+    span = vmax - vmin or 1
+    def y_of(v: float) -> float:
+        return pad_t + plot_h * (1 - (v - vmin) / span)
+    def x_of(i: int) -> float:
+        n = max(len(x_labels) - 1, 1)
+        return pad_l + plot_w * (i / n)
+    grid = []
+    for step in range(5):
+        v = vmin + span * step / 4
+        y = y_of(v)
+        grid.append((v, y))
+    return {"width": width, "height": height, "pad_l": pad_l, "pad_t": pad_t,
+            "plot_w": plot_w, "plot_h": plot_h, "vmin": vmin, "vmax": vmax,
+            "y_of": y_of, "x_of": x_of, "grid": grid}
+
+
+def render_trend_lines(report: Dict[str, Any]) -> str:
+    """多系列折线（趋势）：纯 SVG 手绘，系列配色沿用色板，每系列来源可点击。"""
+    trend = report.get("trend")
+    if not trend:
+        return ""
+    xs = trend["x_labels"]
+    series = trend["series"]
+    all_values = [v for s in series for v in s["values"]]
+    f = _xy_svg_frame(xs, all_values)
+    el = []
+    el.append(f'<svg viewBox="0 0 {f["width"]} {f["height"]}" role="img" aria-label="趋势折线图" '
+              f'style="width:100%;height:auto;font-family:inherit">')
+    for v, y in f["grid"]:
+        el.append(f'<line x1="{f["pad_l"]}" y1="{y:.1f}" x2="{f["width"]-18}" y2="{y:.1f}" stroke="#e6e4e0" stroke-width="1"/>')
+        el.append(f'<text x="{f["pad_l"]-6}" y="{y+3.5:.1f}" text-anchor="end" font-size="10" fill="#8a8781">{_svg_num(v)}</text>')
+    for i, label in enumerate(xs):
+        x = f["x_of"](i)
+        el.append(f'<text x="{x:.1f}" y="{f["height"]-16}" text-anchor="middle" font-size="11" fill="#52514e">{svg_esc(label)}</text>')
+    for idx, s in enumerate(series):
+        color = PALETTE_LIGHT[idx % len(PALETTE_LIGHT)]
+        pts, labels = [], []
+        for i, v in enumerate(s["values"]):
+            x, y = f["x_of"](i), f["y_of"](v)
+            pts.append(f"{x:.1f},{y:.1f}")
+            labels.append(f'<text x="{x:.1f}" y="{y-8:.1f}" text-anchor="middle" font-size="10" fill="{color}">{_svg_num(v)}</text>')
+        link_open = f'<a href="{svg_esc(s["sources"][0]["url"])}" target="_blank" rel="noopener">' if s["sources"] else ""
+        link_close = "</a>" if s["sources"] else ""
+        el.append(f'{link_open}<polyline points="{" ".join(pts)}" fill="none" stroke="{color}" stroke-width="2.2"/>{link_close}')
+        for i, v in enumerate(s["values"]):
+            x, y = f["x_of"](i), f["y_of"](v)
+            el.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3.4" fill="{color}"><title>{svg_esc(s["name"])} {svg_esc(xs[i])}：{_svg_num(v)}{svg_esc(s["unit"])}</title></circle>')
+        el.extend(labels)
+    lx = f["pad_l"]
+    for idx, s in enumerate(series):
+        color = PALETTE_LIGHT[idx % len(PALETTE_LIGHT)]
+        el.append(f'<rect x="{lx}" y="8" width="12" height="3.5" rx="1.5" fill="{color}"/>')
+        el.append(f'<text x="{lx+16}" y="13" font-size="11" fill="#52514e">{svg_esc(s["name"])}{svg_esc(s["unit"] and f"（{s["unit"]}）" or "")}</text>')
+        lx += 26 + cjk_width(s["name"]) * 6 + (14 if s["unit"] else 0)
+    el.append("</svg>")
+    return "".join(el)
+
+
+def render_grouped_bars(report: Dict[str, Any]) -> str:
+    """分组柱状（并列对比）：同 X 下多系列并列（如新旧政策标准对比），纯 SVG。"""
+    compare = report.get("compare")
+    if not compare:
+        return ""
+    xs = compare["x_labels"]
+    series = compare["series"]
+    all_values = [v for s in series for v in s["values"]]
+    f = _xy_svg_frame(xs, all_values)
+    n_group, n_ser = len(xs), len(series)
+    group_w = f["plot_w"] / max(n_group, 1)
+    bar_w = min(group_w * 0.62 / max(n_ser, 1), 46)
+    el = []
+    el.append(f'<svg viewBox="0 0 {f["width"]} {f["height"]}" role="img" aria-label="分组柱状对比图" '
+              f'style="width:100%;height:auto;font-family:inherit">')
+    for v, y in f["grid"]:
+        el.append(f'<line x1="{f["pad_l"]}" y1="{y:.1f}" x2="{f["width"]-18}" y2="{y:.1f}" stroke="#e6e4e0" stroke-width="1"/>')
+        el.append(f'<text x="{f["pad_l"]-6}" y="{y+3.5:.1f}" text-anchor="end" font-size="10" fill="#8a8781">{_svg_num(v)}</text>')
+    base_y = f["y_of"](f["vmin"])
+    for gi, label in enumerate(xs):
+        group_cx = f["pad_l"] + group_w * (gi + 0.5)
+        el.append(f'<text x="{group_cx:.1f}" y="{f["height"]-16}" text-anchor="middle" font-size="11" fill="#52514e">{svg_esc(label)}</text>')
+        for si, s in enumerate(series):
+            v = s["values"][gi]
+            color = PALETTE_LIGHT[si % len(PALETTE_LIGHT)]
+            bx = group_cx - (n_ser * bar_w) / 2 + si * bar_w
+            by = f["y_of"](v)
+            h = max(base_y - by, 1)
+            link_open = f'<a href="{svg_esc(s["sources"][0]["url"])}" target="_blank" rel="noopener">' if s["sources"] else ""
+            link_close = "</a>" if s["sources"] else ""
+            el.append(f'{link_open}<rect x="{bx+1.5:.1f}" y="{by:.1f}" width="{bar_w-3:.1f}" height="{h:.1f}" rx="3" fill="{color}">'
+                      f'<title>{svg_esc(s["name"])} · {svg_esc(label)}：{_svg_num(v)}{svg_esc(s["unit"])}</title></rect>{link_close}')
+            el.append(f'<text x="{bx+bar_w/2:.1f}" y="{by-6:.1f}" text-anchor="middle" font-size="10" fill="{color}">{_svg_num(v)}</text>')
+    lx = f["pad_l"]
+    for si, s in enumerate(series):
+        color = PALETTE_LIGHT[si % len(PALETTE_LIGHT)]
+        el.append(f'<rect x="{lx}" y="8" width="10" height="10" rx="2" fill="{color}"/>')
+        el.append(f'<text x="{lx+14}" y="17" font-size="11" fill="#52514e">{svg_esc(s["name"])}{svg_esc(s["unit"] and f"（{s["unit"]}）" or "")}</text>')
+        lx += 24 + cjk_width(s["name"]) * 6 + (14 if s["unit"] else 0)
+    el.append("</svg>")
+    return "".join(el)
+
+
+def render_share_donut(report: Dict[str, Any]) -> str:
+    """环形占比：构成口径（如资金构成、企业类型分布），中心总量 + 图例带数值与来源。"""
+    share = report.get("share")
+    if not share:
+        return ""
+    total = sum(r["value"] for r in share) or 1
+    cx, cy, r, sw = 90, 96, 62, 30
+    import math
+    el = []
+    el.append(f'<svg viewBox="0 0 {len(share) * 250 if len(share) > 3 else 460} 200" role="img" aria-label="构成占比环形图" '
+              f'style="width:100%;height:auto;font-family:inherit;max-width:640px">')
+    offset = 0.0
+    for i, row in enumerate(share):
+        frac = row["value"] / total
+        color = PALETTE_LIGHT[i % len(PALETTE_LIGHT)]
+        circ = 2 * math.pi * r
+        link_open = f'<a href="{svg_esc(row["sources"][0]["url"])}" target="_blank" rel="noopener">' if row["sources"] else ""
+        link_close = "</a>" if row["sources"] else ""
+        el.append(f'{link_open}<circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="{color}" stroke-width="{sw}" '
+                  f'stroke-dasharray="{frac*circ:.1f} {circ-frac*circ:.1f}" stroke-dashoffset="{-offset*circ:.1f}" '
+                  f'transform="rotate(-90 {cx} {cy})">'
+                  f'<title>{svg_esc(row["name"])}：{_svg_num(row["value"])}{svg_esc(row["unit"])}（{frac*100:.1f}%）</title></circle>{link_close}')
+        offset += frac
+    el.append(f'<text x="{cx}" y="{cy-4}" text-anchor="middle" font-size="20" font-weight="600" fill="#0b0b0b">{_svg_num(total)}</text>')
+    unit = share[0]["unit"]
+    el.append(f'<text x="{cx}" y="{cy+16}" text-anchor="middle" font-size="11" fill="#8a8781">总量{svg_esc(unit and f"（{unit}）" or "")}</text>')
+    for i, row in enumerate(share):
+        frac = row["value"] / total
+        color = PALETTE_LIGHT[i % len(PALETTE_LIGHT)]
+        ly = 34 + i * 30
+        lx = 210
+        el.append(f'<rect x="{lx}" y="{ly-10}" width="11" height="11" rx="2" fill="{color}"/>')
+        el.append(f'<text x="{lx+17}" y="{ly}" font-size="12" fill="#0b0b0b">{svg_esc(row["name"])}</text>')
+        el.append(f'<text x="{lx+150}" y="{ly}" font-size="12" fill="#52514e" text-anchor="end">{_svg_num(row["value"])}{svg_esc(row["unit"])}</text>')
+        el.append(f'<text x="{lx+205}" y="{ly}" font-size="12" fill="#8a8781" text-anchor="end">{frac*100:.1f}%</text>')
+    el.append("</svg>")
+    return "".join(el)
 
 
 def render_timeline(report: Dict[str, Any]) -> str:
@@ -613,6 +849,10 @@ table.matrix .src-cell{font-size:12px}
 .hbar-row>span{width:110px;flex-shrink:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hbar{flex:1;height:18px;background:var(--border);border-radius:999px;overflow:hidden}
 .hbar i{display:block;height:100%;background:#2a78d6;border-radius:999px}
+.viz-duo{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.viz-panel h3{margin:0 0 8px;font-size:14px;color:var(--text-1)}
+.viz-panel svg{display:block}
+@media(max-width:900px){.viz-duo{grid-template-columns:1fr}}
 .hbar-row b{width:80px;flex-shrink:0;text-align:right;font-weight:800}
 .tl-track{margin-bottom:18px}
 .tl-track h3{font-size:14px;color:var(--text-2);margin-bottom:8px}
@@ -681,6 +921,23 @@ def render_html(report: Dict[str, Any], title: str) -> str:
     if report["time"]:
         sections.append(module_intro("政策时间线", "按时间先后排列的事件节点。"))
         sections.append(f'<div class="card">{render_timeline(report)}</div>')
+
+    # 趋势 + 对比双面板（1.4.0：参照豆包可视化形态，纯 SVG 手绘、零外部依赖）
+    trend_svg = render_trend_lines(report)
+    compare_svg = render_grouped_bars(report)
+    if trend_svg or compare_svg:
+        panels = []
+        if trend_svg:
+            panels.append(f'<div class="viz-panel"><h3>趋势变化</h3>{trend_svg}</div>')
+        if compare_svg:
+            panels.append(f'<div class="viz-panel"><h3>并列对比</h3>{compare_svg}</div>')
+        duo = " viz-duo" if trend_svg and compare_svg else ""
+        sections.append(module_intro("趋势与对比", "折线看趋势变化，柱状看同口径对比；数值与来源均可回查（点击折线/柱可打开来源）。"))
+        sections.append(f'<div class="card{duo}">{"".join(panels)}</div>')
+
+    if report.get("share"):
+        sections.append(module_intro("构成占比", "口径构成与占比；悬停或点击色块可看明细与来源。"))
+        sections.append(f'<div class="card">{render_share_donut(report)}</div>')
 
     if report["steps"]:
         sections.append(module_intro("办理流程", "按办理时序排列。"))
