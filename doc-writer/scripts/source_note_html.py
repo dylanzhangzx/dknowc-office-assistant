@@ -51,6 +51,9 @@ def safe_output(value: str, title: str) -> Path:
         path = raw.resolve() if raw.is_absolute() else (OUTPUT_DIR / raw.name).resolve()
     else:
         safe_title = "".join("_" if char in '\\/:*?"<>| ' else char for char in title).strip("_")
+        # title 常已带 _溯源核验报告 后缀（溯源 JSON 的命名惯例），追加前先剥掉，
+        # 避免生成 "…_溯源核验报告_溯源核验报告.html"
+        safe_title = re.sub(r"(_溯源核验报告)+$", "", safe_title)
         path = (OUTPUT_DIR / f"{safe_title[:80] or '溯源核验报告'}_溯源核验报告.html").resolve()
     if path.suffix.lower() not in {".html", ".htm"}:
         path = path.with_suffix(".html")
@@ -93,6 +96,11 @@ def load_source_index() -> dict:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
+        # 顶层为数组的索引 JSON（all_materials_index.json 等）不是搜索结果，跳过。
+        # 此前直接 data.get() 会抛 AttributeError: 'list' object has no
+        # attribute 'get'，导致溯源报告生成中断（曾靠临时移走文件绕过）
+        if not isinstance(data, dict):
+            continue
         # 兼容两种落盘格式：--clean 白名单（顶层 articles）与接口原始响应（content.data）
         articles = data.get("articles") if isinstance(data.get("articles"), list) else None
         policy_files = []
@@ -133,46 +141,14 @@ def load_source_index() -> dict:
     return index
 
 
-# 快照兜底开关：默认启用。接口 screenShotPath 曾存在路径缺 /A/ 层级的拼接 bug
-# （2026-09-16 反馈后端修复中）；本开关内的 verify_snapshots 会在展示前完成
-# "补 /A/ 修订 + 逐条可达实测 + 不可达弃用"，保证报告中出现的快照全部验证可打开。
+# 快照兜底开关：默认启用。verify_snapshots 仅做本地路径格式校验与 /A/ 层级补全
+# （接口部分返回值曾缺该层级），不发起网络请求。
 SNAPSHOT_ENABLED = True
 
 
-# 软 404 关键词：政府站常以 HTTP 200 返回"页面不存在"错误页，状态码识别不了，
-# 需读页面标题嗅探。关键词取自实测样例，且仅匹配 <title>（政策正文不会出现在标题里），
-# 误杀风险极低。
-SOFT_404_KEYWORDS = ("页面不存在", "页面未找到", "您访问的页面", "已删除", "已下线", "无法找到", "not found", "404")
-
-
-def check_link_alive(url: str, timeout: int = 8) -> bool:
-    """检测原文链接是否仍然可达。失效判据（客观信号，与请求方无关）：
-    ① HTTP 404/410；② 软 404——HTTP 200 但页面标题为典型失效页。
-    连接失败、超时、403、5xx 等一律视为"无法确认"按有效处理——政府站
-    常对脚本请求反爬，凭这些判死会误杀可用链接。
-    """
-    for method in ("HEAD", "GET"):
-        try:
-            req = urllib.request.Request(
-                url, method=method,
-                headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"},
-            )
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                if resp.status in (404, 410):
-                    return False
-                if method == "GET":
-                    chunk = resp.read(4096).decode("utf-8", errors="replace")
-                    title = re.search(r"<title>(.*?)</title>", chunk, re.I | re.S)
-                    text = title.group(1) if title else chunk[:200]
-                    lowered = text.lower()
-                    return not any(k in text or k in lowered for k in SOFT_404_KEYWORDS)
-        except urllib.error.HTTPError as e:
-            if method == "GET":
-                return e.code not in (404, 410)
-        except Exception:
-            if method == "GET":
-                return True
-    return True
+# 2026-10-08：链接连通性检测已整体移除——接口返回的链接原样给出，不做任何网络探测。
+# 原 404/410 + 软404 主动探测会把"暂时打不开"误判为死链并隐藏链接，造成"被引来源
+# 没有任何可点链接、无法回看原文"。接口自带的 screenShotPath 快照仍作附加回看入口展示。
 
 
 def normalize_snapshot_url(url: str) -> str:
@@ -185,18 +161,8 @@ def normalize_snapshot_url(url: str) -> str:
 
 
 def mark_dead_links(articles: list[dict]) -> int:
-    """并发检测全部材料的原文链接，404/410 的标记 链接失效=True。返回失效数。"""
-    targets = [(i, a["源网址"]) for i, a in enumerate(articles) if (a.get("源网址") or "").strip()]
-    if not targets:
-        return 0
-    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
-        alive = dict(zip((i for i, _ in targets), pool.map(check_link_alive, (u for _, u in targets))))
-    dead = 0
-    for i, _ in targets:
-        if not alive.get(i, True):
-            articles[i]["链接失效"] = True
-            dead += 1
-    return dead
+    """已废弃（不做连通性检测，链接原样给出）。保留空壳仅供旧调用兼容。"""
+    return 0
 
 
 def verify_snapshots(articles: list[dict]) -> int:
@@ -234,7 +200,7 @@ def to_trace_payload(data: dict) -> tuple[dict, str, str]:
         for index, item in enumerate(group, 1):
             if not isinstance(item, dict):
                 continue
-            material_name = first_value(item, "material_name", "材料名称", "title", "文章标题") or f"来源材料{index}"
+            material_name = first_value(item, "material_name", "材料名称", "title", "文章标题") or f"来源文章{index}"
             # 新结果必须直接携带 source_url；标题匹配仅兼容历史 JSON。
             matched = source_index.get(material_name) or source_index.get(normalize_title(material_name), {})
             source_url = first_value(item, "source_url", "sourceUrl", "源网址", "原文链接", "url") or matched.get("source_url", "")
@@ -284,7 +250,7 @@ def main() -> None:
     parser.add_argument("input", help="结构化可信溯源 JSON，必须位于 official-docs/input")
     parser.add_argument("--output", "-o", help="输出 HTML 文件名，默认写入 official-docs/output")
     parser.add_argument("--skip-link-check", action="store_true",
-                        help="跳过原文链接活性检测（默认检测：404/410 标记失效）")
+                        help="（已废弃 2026-10-08：链接连通性检测已整体移除，参数保留仅为兼容旧命令）")
     parser.add_argument("--disable-snapshot", action="store_true",
                         help="关闭快照兜底展示（默认启用：原文 404 时以验证过的存档快照替换）")
     args = parser.parse_args()
@@ -295,23 +261,26 @@ def main() -> None:
     data = json.loads(input_path.read_text(encoding="utf-8"))
     payload, title, answer = to_trace_payload(data)
     articles = payload.get("content", {}).get("data", {}).get("检索文章", [])
-    if not args.skip_link_check:
-        dead = mark_dead_links(articles)
-        if dead:
-            print(f"链接检测：{dead} 条原文链接已失效（404/410），将改用存档快照或如实标注")
+    # 2026-10-08：链接连通性检测已移除——接口返回的链接原样进报告；
+    # 快照仍作附加回看入口（verify_snapshots 仅做本地路径格式校验）。
     if SNAPSHOT_ENABLED:
         dropped = verify_snapshots(articles)
         total = sum(1 for a in articles if (a.get("快照链接") or "").strip())
         print(f"快照校验：{total} 条路径合法放行 / 弃用 {dropped} 条非法路径（已自动补全 /A/，不做网络检测）")
     # 生成前校验：有素材但正文无角标 = 无法建立核验对应，拒绝生成，要求先修 JSON
     materials_count = len(data.get("materials") or [])
-    if materials_count and not re.search(r"\[\d+\]", answer):
+    # 角标形态允许半角 [n] 与全角【n】（渲染层 normalize_citations 两者都支持）
+    if materials_count and not re.search(r"[\[【]\s*\d+\s*[\]】]", answer):
         print(f"错误：materials 共 {materials_count} 条，但正文 document_content 没有任何 [n] 角标，无法生成核验对应。", file=sys.stderr)
         print("请修正溯源 JSON：在正文关键结论后标注 [1]、[2] 等角标并与 materials 一一对应，然后重新运行本脚本。", file=sys.stderr)
         raise SystemExit(1)
     output_path = safe_output(args.output, title)
     renderer = load_renderer()
-    rendered = renderer.render_html(payload, title, answer_override=answer, question_override=title)
+    # 2026-10-08：溯源报告必须含"完整的原问题"才能独立使用。
+    # 仅取溯源 JSON 顶层的 question（用户原话全文，由 build_trace_json --question 写入）；
+    # 历史 JSON 未带该字段时传空（渲染端不显示该行）——不得用报告标题冒充原问题。
+    question = str(data.get("question") or "").strip()
+    rendered = renderer.render_html(payload, title, answer_override=answer, question_override=question)
     output_path.write_text(rendered, encoding="utf-8")
     print(f"溯源核验报告 HTML 已生成: {output_path}")
 

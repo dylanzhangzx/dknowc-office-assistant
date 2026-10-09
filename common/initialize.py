@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """深知晓办公助手统一初始化与环境检查。
 
-整合深知公文写作 / 深知可信咨询 / 深知可信搜索 / 深知可信PPT四个能力模块的公共层。
+整合深知公文写作 / 深知可信搜索 / 深知可信PPT三个能力模块的公共层（v1.4.0 起移除可信咨询）。
 
-API Key 读取（对齐母版 1.2.x 方案）：优先进程环境变量 DKNOWC_API_KEY，缺失时从
-~/.zshrc 标记块兜底解析——宿主进程早于 Key 写入启动、或宿主安全更新后不再加载
-zshrc 导出变量时不误报缺失；注册成功后自动写入，无需重启宿主。
+API Key 读取（对齐母版 3.7.7/1.4.x 方案）：优先进程环境变量 DKNOWC_API_KEY，缺失时
+读本机专用配置文件 ~/.config/dknowc/api_key（Windows %APPDATA%/dknowc/api_key；注册
+脚本自动写入，无需重启宿主），最后从历史 ~/.zshrc 标记块迁移兜底（旧版本写入位置）。
 
 三层门禁划分（本脚本只报告状态，是否阻断由 SKILL.md 按任务类型判定）：
 - `ready`：基础运行环境（python3、requests）就绪；缺失暂停全部能力。
-- `search_ready`：可调用深知可信检索/咨询（Key 已解析且 requests 可用）。
+- `search_ready`：可调用深知可信检索（Key 已解析且 requests 可用）。
   仅公文写作的纯排版任务、PPT 的材料免检索模式不要求。
 - `word_ready` / `pptx_ready`：能力专属依赖（python-docx / python-pptx+XlsxWriter），
   缺失不阻断其他能力，导出时可用 uv run --with … 隔离提供。
@@ -47,17 +47,34 @@ PLACEHOLDER_KEYS = {
 # 缺 Key 时的 S1 三段式引导模板（对齐母版 onboarding_scripts.md，Agent 优先原样转述）。
 GUIDE_MESSAGE = (
     "要查的内容需要接入权威文件库才能给出可核验的答案。"
-    "开通后自带 300 次免费检索额度，完成实名认证还能再领 100 元体验金；"
+    "开通是免费的：注册即赠送 10 万积分，完成实名认证再送 10 万积分；"
     "只需提供一个手机号接收验证码，注册我来代劳，不用填单位信息。"
     "如果暂时不想开通，我可以先给出带「依据待核验」标注的初步回答，之后你再决定是否补权威依据。"
 )
 
 
+def _api_key_file_path():
+    """Key 专用配置文件路径（跨平台，与 register_key.mjs / 各模块 api_key.py 一致）。"""
+    if sys.platform == "win32":
+        base = os.environ.get("APPDATA") or str(Path.home())
+        return Path(base) / "dknowc" / "api_key"
+    xdg = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
+    return Path(xdg) / "dknowc" / "api_key"
+
+
 def resolve_api_key():
-    """返回 (key, source)。优先进程环境变量，缺失时从 ~/.zshrc 兜底解析。"""
+    """返回 (key, source)。优先环境变量，其次专用配置文件，最后 ~/.zshrc 迁移兜底。"""
     value = os.environ.get(API_KEY_ENV, "").strip()
     if value:
         return value, "environment"
+
+    key_file = _api_key_file_path()
+    try:
+        stored = key_file.read_text(encoding="utf-8", errors="ignore").strip()
+    except OSError:
+        stored = ""
+    if stored:
+        return stored, "keyfile"
 
     zshrc = Path.home() / ".zshrc"
     try:
@@ -92,7 +109,7 @@ def check_api_key_config():
         "api_key_configured": False,
         "api_key_env": API_KEY_ENV,
         "api_key_source": None,
-        "api_key_hint": f"本 Skill 的检索/咨询能力需要 {API_KEY_ENV}（环境变量或 ~/.zshrc 标记块）。当前未检测到可用 Key，请先开通（注册脚本可代劳）或到 MaaS 平台获取。",
+        "api_key_hint": f"本 Skill 的检索能力需要 {API_KEY_ENV}（环境变量或 ~/.zshrc 标记块）。当前未检测到可用 Key，请先开通（注册脚本可代劳）或到 MaaS 平台获取。",
         "guide_message": GUIDE_MESSAGE,
     }
 

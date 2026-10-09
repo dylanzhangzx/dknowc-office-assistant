@@ -28,7 +28,7 @@ SEARCH_RESULTS_DIR = SKILL_ROOT / "official-docs" / "search-results"
 # 命中后返回 quota_exhausted=true，Agent 必须停止重试并引导用户到 MaaS 处理，不得反复调用。
 # 错误码语义按接口文档区分：401=密钥校验失败（可能失效，需重新获取）；403=接口无权限（密钥类型不符）；
 # 402=余额类。429 接口文案为"繁忙/限流/余额不足"三义混合、无法归因——现阶段全部按额度用尽处理
-# （2026-09-10 产品决策），待后端把服务端问题与余额拆分为不同错误码后再调整回区分逻辑。
+# （2026-09-10 起），待后端把服务端问题与余额拆分为不同错误码后再调整回区分逻辑。
 MAAS_PLATFORM_URL = "https://platform.dknowc.cn/auth/#/login"
 QUOTA_EXHAUSTED_HTTP_CODES = {402, 429}
 QUOTA_EXHAUSTED_KEYWORDS = (
@@ -51,8 +51,8 @@ def detect_quota_exhausted(status_code=None, errmsg=None):
 def user_message_for_error(status_code=None, quota_exhausted=False):
     """按错误类型返回给用户的固定话术（Agent 必须原样转述，不得改写后发挥）。"""
     if quota_exhausted:
-        return (f"检索调不动，很可能是额度用完了：到 {MAAS_PLATFORM_URL} 看一下额度，"
-                "完成实名认证可以领 100 元体验金。")
+        return (f"检索调不动，很可能是积分用完了：到 {MAAS_PLATFORM_URL} 看一下积分，"
+                "完成实名认证可以再领 10 万积分。")
     if status_code == 401:
         return "访问密钥校验没通过（密钥可能已失效），我重新获取一下密钥；还不行的话需要重新验证手机号。"
     if status_code == 403:
@@ -138,6 +138,15 @@ def _post(url: str, api_key: str, payload: Dict[str, Any], timeout: int) -> Dict
     req = urllib.request.Request(url, data=data, method="POST")
     req.add_header("api-key", api_key)
     req.add_header("Content-Type", "application/json")
+    # 来源声明（X-Dknowc-Attribution，仅统计用、不参与鉴权）：
+    # 读包根 attribution.json + SKILL.md 的 version；读取失败不加头、不阻断请求。
+    try:
+        from attribution import build_attribution_header, ATTRIBUTION_HEADER
+        _attr = build_attribution_header()
+        if _attr:
+            req.add_header(ATTRIBUTION_HEADER, _attr)
+    except Exception:
+        pass
 
     started = time.perf_counter()
     try:
@@ -194,7 +203,13 @@ def _short(text: Any, limit: int = 180) -> str:
     return value[:limit].rstrip() + "..."
 
 
-def _print_summary(body: Dict[str, Any], show_materials: int) -> None:
+def _bail_if_biz_error(body: Dict[str, Any]) -> None:
+    """业务码校验：HTTP 200 ≠ 成功（服务端可能返回 code=50001 / data=null）。
+
+    1.4.0 修复：`--json-only` 落盘前与摘要输出前都必须校验——此前 `--json-only` 分支
+    直接保存并打印"已保存"，错误响应被当成正常结果（实测：504 重试后返回 50001、
+    data=null，脚本仍报"已保存"，Agent 靠自己翻文件才发觉）。
+    """
     code = body.get("code")
     msg = body.get("message") or body.get("msg")
     if code not in (0, None) or msg not in ("success", None, ""):
@@ -211,6 +226,10 @@ def _print_summary(body: Dict[str, Any], show_materials: int) -> None:
             "maas_platform_url": MAAS_PLATFORM_URL,
         }, ensure_ascii=False))
         sys.exit(1)
+
+
+def _print_summary(body: Dict[str, Any], show_materials: int) -> None:
+    _bail_if_biz_error(body)
 
     data = body.get("data") if isinstance(body.get("data"), dict) else {}
     searches = [s for s in (data.get("searches") or []) if isinstance(s, dict)]
@@ -277,7 +296,7 @@ def main() -> None:
         os.environ.get("DKNOWC_API_KEY"),
     )
     if not api_key:
-        # 宿主进程读不到 shell 环境变量时，从 ~/.zshrc 兜底解析已持久化的 Key
+        # 宿主进程读不到 shell 环境变量时，从专用配置文件兜底解析已持久化的 Key（历史 zshrc 兜底）
         try:
             from api_key import resolve_api_key
             api_key, _source = resolve_api_key()
@@ -298,12 +317,14 @@ def main() -> None:
     body = _post(endpoint, api_key, payload, args.timeout)
 
     if args.json_only:
+        _bail_if_biz_error(body)  # 落盘前校验：错误响应不落盘、不报"已保存"（1.4.0 修复）
         raw_json = json.dumps(body, ensure_ascii=False, indent=2)
         if args.output:
             output_path = resolve_output_json(args.output)
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_text(raw_json, encoding="utf-8")
-            print(f"已保存深度搜索结果 JSON：{output_path.relative_to(SKILL_ROOT)}")
+            # 绝对路径输出（2026-09-28 修复）：同 trusted_search.py，避免 Agent 到 cwd 找不到而全盘 find
+            print(f"已保存深度搜索结果 JSON（位于 skill 工作区，绝对路径）：{output_path}")
         else:
             print(raw_json)
         return
