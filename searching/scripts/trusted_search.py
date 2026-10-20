@@ -140,8 +140,9 @@ def _build_payload(args: argparse.Namespace) -> Dict[str, Any]:
     payload: Dict[str, Any] = {
         "query": args.query,
         "policy": False if args.no_policy else True,
-        "item": False if args.no_item else True,
-        "knowBase": False if args.no_know_base else True,
+        # item / knowBase 不传（2026-10-20 同号修正）：接口盘点实测 recommendationItems
+        # 始终不返回（办事清单能力不可用）、knowledgeBase 专库链接属 2026-09-29 已移除的
+        # 老能力——全链路无消费者，停传减少无效负载（服务端两者默认均为 false）。
         "return_full_content": args.return_full_content,
         # simplified 默认 False：
         # 实测同一 query 下 simplified=true 返回精简集（材料更少且无存档快照 screenShotPath），
@@ -327,9 +328,6 @@ def main() -> None:
     parser.add_argument("--policy", action="store_true", help="返回规范性文件清单")
     parser.add_argument("--no-policy", action="store_true", help="不返回规范性文件清单")
     parser.add_argument("--item", action="store_true", help="返回公共事项在线办理清单")
-    parser.add_argument("--no-item", action="store_true", help="不返回公共事项在线办理清单")
-    parser.add_argument("--know-base", action="store_true", help="请求体携带 knowBase（默认即开；链接不再向用户展示，2026-09-29 移除老能力）")
-    parser.add_argument("--no-know-base", action="store_true", help="请求体不携带 knowBase")
     parser.add_argument("--return-full-content", action="store_true", help="返回资料全文")
     parser.add_argument("--segment-count", type=int, help="每篇材料最多返回段落数")
     parser.add_argument("--simplified", action="store_true",
@@ -376,6 +374,13 @@ def main() -> None:
     body = _post(endpoint, api_key, payload, args.timeout)
     if args.json_only:
         _bail_if_biz_error(body)  # 落盘前校验：错误响应不落盘、不报"已保存"（1.4.0 修复）
+        # 检索通道打标（1.5.0）：每篇检索文章注入 检索通道="深知可信搜索"，供 merge →
+        # 渲染按接口通道拆分计数与来源声明；字段随文章 dict 原样透传
+        _content = body.get("content") if isinstance(body.get("content"), dict) else {}
+        _data = _content.get("data") if isinstance(_content.get("data"), dict) else {}
+        for _a in (_data.get("检索文章") or []):
+            if isinstance(_a, dict) and not _a.get("检索通道"):
+                _a["检索通道"] = "深知可信搜索"
         raw_json = json.dumps(body, ensure_ascii=False, indent=2)
         if args.output:
             output_path = resolve_output_json(args.output)

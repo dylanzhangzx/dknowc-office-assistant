@@ -283,7 +283,9 @@ def main() -> None:
     parser.add_argument("--json-only", action="store_true", help="仅输出接口原始 JSON")
     parser.add_argument("--output", "-o", help="深度搜索结果 JSON 文件名，写入 official-docs/search-results/（配合 --json-only 使用）")
     parser.add_argument("--show-materials", type=int, default=5, help="摘要中展示前 N 篇材料")
-    parser.add_argument("--timeout", type=int, default=300, help="请求超时秒数")
+    # 默认 600s（2026-10-20 同号修正）：深度链路网关超时已由 60s 放宽至 10 分钟（2026-09-24 服务端
+    # 调整；实测单地域 63–101s、重题可达 3–10 分钟），默认 300s 有重题被客户端提前掐断的风险。
+    parser.add_argument("--timeout", type=int, default=600, help="请求超时秒数（默认 600，与链路 10 分钟上限对齐）")
     args = parser.parse_args()
 
     endpoint = _pick(
@@ -318,6 +320,16 @@ def main() -> None:
 
     if args.json_only:
         _bail_if_biz_error(body)  # 落盘前校验：错误响应不落盘、不报"已保存"（1.4.0 修复）
+        # 检索通道打标（1.5.0）：v3 产物每篇文章（含公共文章）注入 检索通道="深知深度搜索"，
+        # 供 merge → 渲染按接口通道拆分计数与来源声明；字段随文章 dict 原样透传
+        _data = body.get("data") if isinstance(body.get("data"), dict) else {}
+        for _s in (_data.get("searches") or []):
+            for _a in ((_s.get("result") if isinstance(_s, dict) else None) or []):
+                if isinstance(_a, dict) and not _a.get("检索通道"):
+                    _a["检索通道"] = "深知深度搜索"
+        for _a in (_data.get("common_articles") or []):
+            if isinstance(_a, dict) and not _a.get("检索通道"):
+                _a["检索通道"] = "深知深度搜索"
         raw_json = json.dumps(body, ensure_ascii=False, indent=2)
         if args.output:
             output_path = resolve_output_json(args.output)

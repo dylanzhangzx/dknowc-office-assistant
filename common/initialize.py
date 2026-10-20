@@ -39,7 +39,6 @@ PLACEHOLDER_KEYS = {
     "",
     "your_api_key_here",
     "你的深知可信统一接口 API Key",
-    "你的深知可信咨询 API Key",
     "你的深知可信搜索 API Key",
     "你的深知搜索 API Key",
 }
