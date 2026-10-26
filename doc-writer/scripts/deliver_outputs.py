@@ -53,6 +53,8 @@ from pathlib import Path
 SKILL_ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = SKILL_ROOT / "official-docs" / "output"
 RECENT_WINDOW_SECONDS = 10 * 60
+# 只交付面向用户的最终产物；带角标的正文 Markdown 是内部中间文件
+ALLOWED_DELIVERY_SUFFIXES = (".html", ".htm", ".docx")
 
 # 常见宿主工作区环境变量，按顺序探测
 WORKSPACE_ENV_VARS = (
@@ -349,7 +351,7 @@ def detect_dest(explicit_dest: str | None, host: str) -> tuple[Path | None, bool
         return dest, True, "cwd", False, []
 
     # 宿主身份未知：不复制、不要求 --dest，交付物保留在 skill 输出目录
-    # （3.7.5 简化决策：仅 WorkBuddy/豆包有明确工作区才复制，其余宿主留在 skill output）
+    # （3.7.5 起：仅 WorkBuddy/豆包有明确工作区才复制，其余宿主留在 skill output）
     if host == "unknown":
         return None, False, "unknown", False, doubao_candidates
 
@@ -509,6 +511,23 @@ def main() -> int:
         for src in files:
             if not src.is_file():
                 results.append({"copied": False, "source": str(src), "error": "文件不存在"})
+                continue
+            if src.suffix.lower() not in ALLOWED_DELIVERY_SUFFIXES:
+                results.append({
+                    "copied": False, "source": str(src),
+                    "error": ("内部中间文件不交付：只允许 .html / .docx。"
+                              "带角标的正文 Markdown 仅用于装配溯源 JSON，"
+                              "不得作为交付物展示或复制。"),
+                })
+                continue
+            try:
+                src.resolve().relative_to(OUTPUT_DIR.resolve())
+            except ValueError:
+                results.append({
+                    "copied": False, "source": str(src),
+                    "error": (f"交付源文件必须位于 {OUTPUT_DIR}/。"
+                              "不得从宿主会话目录或 skill 其它目录直接交付。"),
+                })
                 continue
             results.append(copy_without_overwrite(src, dest))
         # note 按实际结果生成：交付失败时不得再写"已复制到宿主工作区"
