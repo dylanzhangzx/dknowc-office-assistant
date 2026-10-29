@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PPT Master SVG quality-check implementation.
+"""深知可信PPT SVG quality-check implementation.
 
 Owns SVG, project-contract, template, and report validation. The stable CLI and
 compatibility import surface remain in ``scripts/svg_quality_checker.py``.
@@ -11,7 +11,7 @@ Examples:
     from svg_quality_checker import SVGQualityChecker
 
 Dependencies:
-    Standard library plus local PPT Master validation modules.
+    Standard library plus local 深知可信PPT validation modules.
 """
 
 import copy
@@ -5516,8 +5516,8 @@ class SVGQualityChecker:
                 'release SVG projects require an explicit spec_lock.md '
                 'pptx_structure.mode: flat (free design / brand-only) or '
                 f'structured (deck/layout template); found {label}. New '
-                'free-design projects use mode: flat; create a new template '
-                'workspace through skills/ppt-master/workflows/create-template.md, '
+                'free-design projects use mode: flat; follow the SVG authoring contract '
+                'in references/svg-authoring.md, '
                 'then generate new structured SVG pages before export. Existing '
                 'PPTX/SVG files are not upgraded in place.',
             ))
@@ -6874,7 +6874,7 @@ class SVGQualityChecker:
                     'legacy_native_structure_pair',
                     "legacy native_structure.json/source_template.pptx template "
                     "contracts must be replaced through "
-                    "skills/ppt-master/workflows/create-template.md",
+                    "references/svg-authoring.md",
                 ))
 
             if declared_structure_mode != 'structured':
@@ -6891,8 +6891,7 @@ class SVGQualityChecker:
                     'error',
                     'legacy_structure_contract',
                     "legacy template structure detected; create a new current "
-                    "workspace through skills/ppt-master/workflows/"
-                    "create-template.md before Step 3 consumption",
+                    "workspace per references/svg-authoring.md before Step 3 consumption",
                 ))
         spec_pages = self._extract_spec_roster(spec_text) if spec_text else []
         custom_contract = self._extract_frontmatter_placeholders(spec_text) if spec_text else {}
@@ -7578,7 +7577,7 @@ class SVGQualityChecker:
     def export_report(self, output_file: str = 'svg_quality_report.txt'):
         """Export check report"""
         with open(output_file, 'w', encoding='utf-8') as f:
-            f.write("PPT Master SVG Quality Check Report\n")
+            f.write("深知可信PPT SVG Quality Check Report\n")
             f.write("=" * 80 + "\n\n")
 
             for result in self.results:

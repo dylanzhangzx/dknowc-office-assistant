@@ -3,9 +3,9 @@
 
 依据与 MaaS 平台方约定的调用来源统计方案：
 
-- 声明格式（单行纯 ASCII）：`kind=skill;agentSource=dknowc-ppt-assistant;version=1.3.6;channel=skillhub`
+- 声明格式（单行纯 ASCII）：`kind=skill;agentSource=<本包名>;version=<SKILL.md 版本>;channel=<渠道>`
   （头内键名为 agentSource——2026-10-09 平台方改名，区别于注册 body 的 `source="agent"` 合同标记）
-- kind/source/channel 读自**包根 `attribution.json`**（渠道差异由打包期改这一个文件表达）；
+- kind/source/channel 读自**包根 `attribution.json`**；
 - **version 运行时从 SKILL.md frontmatter 解析**（单一事实源，不硬编码）；
 - 声明为调用方自报，**仅用于统计、不参与鉴权、不作安全凭证**；
   读取失败时返回 None，调用方不加该头、**不阻断请求**（服务端归"未声明"桶）。
@@ -24,15 +24,13 @@ import re
 from pathlib import Path
 
 SKILL_ROOT = Path(__file__).resolve().parent.parent
-# 综合包适配：attribution.json 与 SKILL.md（version 来源）在综合包根目录，不在模块目录
-ATTR_ROOT = SKILL_ROOT.parent
 ATTRIBUTION_HEADER = "X-Dknowc-Attribution"
 
 
 def _read_skill_version() -> str:
     """从 SKILL.md frontmatter 解析 version（单一事实源）。失败返回空串（头值省略 version 字段）。"""
     try:
-        text = (ATTR_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        text = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
         m = re.search(r'^version:\s*"?([^"\n]+)"?', text, re.M)
         return m.group(1).strip() if m else ""
     except Exception:
@@ -42,7 +40,7 @@ def _read_skill_version() -> str:
 def build_attribution_header() -> str | None:
     """构造声明头值。attribution.json 缺失或 source 为空时返回 None（不加头，不阻断）。"""
     try:
-        meta = json.loads((ATTR_ROOT / "attribution.json").read_text(encoding="utf-8"))
+        meta = json.loads((SKILL_ROOT / "attribution.json").read_text(encoding="utf-8"))
     except Exception:
         return None
     kind = str(meta.get("kind") or "skill").strip() or "skill"

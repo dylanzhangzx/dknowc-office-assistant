@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PPT Master SVG quality-check CLI implementation.
+"""深知可信PPT SVG quality-check CLI implementation.
 
 Parses the legacy command-line contract and delegates validation to the checker.
 
@@ -10,7 +10,7 @@ Examples:
     python3 scripts/svg_quality_checker.py projects/demo --stage final --json
 
 Dependencies:
-    Standard library plus local PPT Master validation modules.
+    Standard library plus local 深知可信PPT validation modules.
 """
 
 import sys
@@ -55,7 +55,7 @@ def _default_json_report_path(
 
 def print_usage() -> None:
     """Print CLI usage information."""
-    print("PPT Master - SVG Quality Check Tool\n")
+    print("深知可信PPT - SVG Quality Check Tool\n")
     print("Usage:")
     print("  python3 scripts/svg_quality_checker.py <svg_file>")
     print("  python3 scripts/svg_quality_checker.py <directory>")

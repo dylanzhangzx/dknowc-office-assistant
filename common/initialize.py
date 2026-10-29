@@ -5,7 +5,7 @@
 
 API Key 读取（对齐母版 3.7.7/1.4.x 方案）：优先进程环境变量 DKNOWC_API_KEY，缺失时
 读本机专用配置文件 ~/.config/dknowc/api_key（Windows %APPDATA%/dknowc/api_key；注册
-脚本自动写入，无需重启宿主），最后从历史 ~/.zshrc 标记块迁移兜底（旧版本写入位置）。
+脚本自动写入，无需重启宿主）。不读取、不写入任何 shell 配置文件。
 
 三层门禁划分（本脚本只报告状态，是否阻断由 SKILL.md 按任务类型判定）：
 - `ready`：基础运行环境（python3、requests）就绪；缺失暂停全部能力。
@@ -62,7 +62,7 @@ def _api_key_file_path():
 
 
 def resolve_api_key():
-    """返回 (key, source)。优先环境变量，其次专用配置文件，最后 ~/.zshrc 迁移兜底。"""
+    """返回 (key, source)。优先进程环境变量，其次本机专用配置文件；两处均无视为未配置。"""
     value = os.environ.get(API_KEY_ENV, "").strip()
     if value:
         return value, "environment"
@@ -75,18 +75,6 @@ def resolve_api_key():
     if stored:
         return stored, "keyfile"
 
-    zshrc = Path.home() / ".zshrc"
-    try:
-        text = zshrc.read_text(encoding="utf-8", errors="ignore")
-    except OSError:
-        return "", ""
-    match = re.search(
-        rf"^\s*(?:export\s+)?{API_KEY_ENV}=['\"]([^'\"]+)['\"]",
-        text,
-        re.MULTILINE,
-    )
-    if match:
-        return match.group(1).strip(), "zshrc"
     return "", ""
 
 
@@ -108,7 +96,7 @@ def check_api_key_config():
         "api_key_configured": False,
         "api_key_env": API_KEY_ENV,
         "api_key_source": None,
-        "api_key_hint": f"本 Skill 的检索能力需要 {API_KEY_ENV}（环境变量或 ~/.zshrc 标记块）。当前未检测到可用 Key，请先开通（注册脚本可代劳）或到 MaaS 平台获取。",
+        "api_key_hint": f"本 Skill 的检索能力需要 {API_KEY_ENV}（环境变量或本机专用配置文件）。当前未检测到可用 Key，请先开通（注册脚本可代劳）或到 MaaS 平台获取。",
         "guide_message": GUIDE_MESSAGE,
     }
 
